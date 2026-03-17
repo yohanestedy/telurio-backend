@@ -1,0 +1,301 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Role {
+  ADMIN
+  OWNER
+  OPERATOR
+}
+
+enum OrderLifecycleStatus {
+  ACTIVE
+  CANCELLED
+}
+
+enum DeliveryStatus {
+  BELUM_DIHANTAR
+  SEDANG_DIHANTAR
+  SUDAH_DIHANTAR
+}
+
+enum PaymentStatus {
+  BELUM_BAYAR
+  DP
+  LUNAS
+}
+
+enum PaymentMethod {
+  CASH
+  TRANSFER
+}
+
+enum AuditActionType {
+  CREATE
+  UPDATE
+  STATUS_CHANGE
+  CORRECTION
+  ACTIVATE
+  DEACTIVATE
+}
+
+model User {
+  id                     String            @id @db.Uuid
+  name                   String
+  username               String            @unique
+  passwordHash           String
+  role                   Role
+  isActive               Boolean           @default(true)
+  createdById            String?           @db.Uuid
+  updatedById            String?           @db.Uuid
+  deletedAt              DateTime?
+  deletedById            String?           @db.Uuid
+  deleteReason           String?
+  createdAt              DateTime          @default(now())
+  updatedAt              DateTime          @updatedAt
+  coopAccesses           UserCoopAccess[]
+  ownedExpenseCategories ExpenseCategory[]
+
+  @@index([role, isActive])
+  @@index([deletedAt])
+}
+
+model Coop {
+  id                  String                  @id @db.Uuid
+  name                String
+  population          Int
+  chickenStrain       String?
+  chickBirthDate      DateTime?
+  depreciationPercent Decimal                 @default(15) @db.Decimal(5, 2)
+  isActive            Boolean                 @default(true)
+  createdById         String?                 @db.Uuid
+  updatedById         String?                 @db.Uuid
+  deletedAt           DateTime?
+  deletedById         String?                 @db.Uuid
+  deleteReason        String?
+  createdAt           DateTime                @default(now())
+  updatedAt           DateTime                @updatedAt
+  userAccesses        UserCoopAccess[]
+  productionRecords   ProductionRecord[]
+  orderAllocations    OrderSourceAllocation[]
+  expenses            Expense[]
+
+  @@unique([name])
+  @@index([isActive])
+  @@index([deletedAt])
+}
+
+model UserCoopAccess {
+  id                    String    @id @db.Uuid
+  userId                String    @db.Uuid
+  coopId                String    @db.Uuid
+  ownershipSharePercent Decimal?  @db.Decimal(5, 2)
+  createdById           String?   @db.Uuid
+  updatedById           String?   @db.Uuid
+  deletedAt             DateTime?
+  deletedById           String?   @db.Uuid
+  deleteReason          String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+  user                  User      @relation(fields: [userId], references: [id])
+  coop                  Coop      @relation(fields: [coopId], references: [id])
+
+  @@unique([userId, coopId])
+  @@index([coopId, deletedAt])
+  @@index([userId, deletedAt])
+}
+
+model Customer {
+  id           String    @id @db.Uuid
+  name         String
+  address      String?
+  phone        String?
+  createdById  String?   @db.Uuid
+  updatedById  String?   @db.Uuid
+  deletedAt    DateTime?
+  deletedById  String?   @db.Uuid
+  deleteReason String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  orders       Order[]
+
+  @@index([name])
+  @@index([phone])
+  @@index([deletedAt])
+}
+
+model ProductionRecord {
+  id             String    @id @db.Uuid
+  date           DateTime  @db.Date
+  coopId         String    @db.Uuid
+  collectionTime String
+  goodKg         Decimal   @db.Decimal(12, 3)
+  goodCount      Int
+  brokenCount    Int?
+  notes          String?
+  createdById    String    @db.Uuid
+  updatedById    String?   @db.Uuid
+  deletedAt      DateTime?
+  deletedById    String?   @db.Uuid
+  deleteReason   String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  coop           Coop      @relation(fields: [coopId], references: [id])
+
+  @@unique([date, coopId, collectionTime])
+  @@index([coopId, date])
+  @@index([deletedAt])
+}
+
+model EggPrice {
+  id            String    @id @db.Uuid
+  effectiveDate DateTime  @db.Date
+  pricePerKg    BigInt    @db.BigInt
+  notes         String?
+  createdById   String?   @db.Uuid
+  updatedById   String    @db.Uuid
+  deletedAt     DateTime?
+  deletedById   String?   @db.Uuid
+  deleteReason  String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@unique([effectiveDate])
+  @@index([deletedAt])
+}
+
+model Order {
+  id               String                  @id @db.Uuid
+  customerId       String                  @db.Uuid
+  quantityKg       Decimal                 @db.Decimal(12, 3)
+  // Locked when delivery starts via `Hantar`. May stay null until the delivery-date price exists.
+  pricePerKg       BigInt?                 @db.BigInt
+  // Computed as quantityKg x pricePerKg with round-half-up to Rupiah.
+  totalInvoice     BigInt?                 @db.BigInt
+  // Past dates are allowed for late historical input, but such orders should become non-editable after creation.
+  deliveryDate     DateTime                @db.Date
+  deliverBefore    String?
+  lifecycleStatus  OrderLifecycleStatus    @default(ACTIVE)
+  deliveryStatus   DeliveryStatus          @default(BELUM_DIHANTAR)
+  paymentStatus    PaymentStatus           @default(BELUM_BAYAR)
+  paymentMethod    PaymentMethod?
+  // MVP allows only one DP per order. Keep null when payment status is BELUM_BAYAR or LUNAS-without-DP-history.
+  dpAmount         BigInt?                 @db.BigInt
+  notes            String?
+  createdById      String                  @db.Uuid
+  updatedById      String?                 @db.Uuid
+  // Filled when operator presses `Hantar`.
+  startedById      String?                 @db.Uuid
+  // Filled when operator completes delivery with `Selesai Pengantaran`.
+  deliveredById    String?                 @db.Uuid
+  cancelledAt      DateTime?
+  cancelledById    String?                 @db.Uuid
+  cancelReason     String?
+  cancelNotes      String?
+  createdAt        DateTime                @default(now())
+  updatedAt        DateTime                @updatedAt
+  customer         Customer                @relation(fields: [customerId], references: [id])
+  allocations      OrderSourceAllocation[]
+  paymentHistories PaymentHistory[]
+
+  @@index([deliveryDate, lifecycleStatus, deliveryStatus])
+  @@index([paymentStatus])
+  @@index([customerId])
+}
+
+model OrderSourceAllocation {
+  id           String   @id @db.Uuid
+  orderId      String   @db.Uuid
+  coopId       String   @db.Uuid
+  quantityKg   Decimal  @db.Decimal(12, 3)
+  assignedById String   @db.Uuid
+  updatedById  String?  @db.Uuid
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  order        Order    @relation(fields: [orderId], references: [id])
+  coop         Coop     @relation(fields: [coopId], references: [id])
+
+  @@index([orderId])
+  @@index([coopId])
+}
+
+model PaymentHistory {
+  id            String         @id @db.Uuid
+  orderId       String         @db.Uuid
+  paymentStatus PaymentStatus
+  paymentMethod PaymentMethod?
+  // Stores the transaction amount recorded at this update, not cumulative balance.
+  amountPaid    BigInt?        @db.BigInt
+  notes         String?
+  updatedById   String         @db.Uuid
+  createdAt     DateTime       @default(now())
+  order         Order          @relation(fields: [orderId], references: [id])
+
+  @@index([orderId, createdAt])
+}
+
+model ExpenseCategory {
+  id           String    @id @db.Uuid
+  ownerId      String    @db.Uuid
+  name         String
+  isActive     Boolean   @default(true)
+  createdById  String?   @db.Uuid
+  updatedById  String?   @db.Uuid
+  deletedAt    DateTime?
+  deletedById  String?   @db.Uuid
+  deleteReason String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  owner        User      @relation(fields: [ownerId], references: [id])
+  expenses     Expense[]
+
+  @@index([ownerId, isActive])
+  @@index([deletedAt])
+}
+
+model Expense {
+  id                String           @id @db.Uuid
+  date              DateTime         @db.Date
+  coopId            String           @db.Uuid
+  expenseCategoryId String?          @db.Uuid
+  categoryLabel     String
+  description       String?
+  amount            BigInt           @db.BigInt
+  notes             String?
+  createdById       String           @db.Uuid
+  updatedById       String?          @db.Uuid
+  deletedAt         DateTime?
+  deletedById       String?          @db.Uuid
+  deleteReason      String?
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+  coop              Coop             @relation(fields: [coopId], references: [id])
+  expenseCategory   ExpenseCategory? @relation(fields: [expenseCategoryId], references: [id])
+
+  @@index([coopId, date])
+  @@index([expenseCategoryId])
+  @@index([deletedAt])
+}
+
+model AuditLog {
+  id             String          @id @db.Uuid
+  entityType     String
+  entityId       String          @db.Uuid
+  actionType     AuditActionType
+  actorUserId    String          @db.Uuid
+  actorName      String?
+  coopId         String?         @db.Uuid
+  summary        String?
+  beforeDataJson Json?
+  afterDataJson  Json?
+  metadataJson   Json?
+  createdAt      DateTime        @default(now())
+
+  @@index([entityType, entityId, createdAt])
+  @@index([actorUserId, createdAt])
+  @@index([coopId, createdAt])
+}
