@@ -1,5 +1,6 @@
 {
   "version": 2,
+  "buildCommand": "npm run build:vercel",
   "builds": [
     {
       "src": "dist/main.js",
