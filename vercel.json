@@ -1,16 +1,34 @@
 {
   "version": 2,
+  "buildCommand": "npm run build:vercel",
   "builds": [
     {
-      "src": "dist/src/serverless.js",
-      "use": "@vercel/node"
+      "src": "api/index.ts",
+      "use": "@vercel/node",
+      "config": {
+        "includeFiles": ["prisma/**", "src/**"]
+      }
     }
   ],
   "routes": [
     {
+      "src": "/api/(.*)",
+      "methods": ["OPTIONS"],
+      "dest": "/api/index.ts",
+      "headers": {
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Methods": "GET,POST,PUT,PATCH,DELETE,OPTIONS",
+        "Access-Control-Allow-Headers": "Content-Type, Authorization",
+        "Access-Control-Max-Age": "86400"
+      }
+    },
+    {
       "src": "/(.*)",
-      "dest": "dist/src/serverless.js",
-      "methods": ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
+      "dest": "/api/index.ts",
+      "headers": {
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Credentials": "true"
+      }
     }
   ]
 }
