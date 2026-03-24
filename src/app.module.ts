@@ -4,6 +4,8 @@ import { APP_FILTER, APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { PrismaModule } from './prisma';
 import { AuthModule, JwtAuthGuard, RolesGuard } from './auth';
+import { UsersModule } from './users';
+import { CoopsModule } from './coops';
 import { AllExceptionsFilter } from './common/filters';
 import {
   BigIntSerializerInterceptor,
@@ -16,6 +18,8 @@ import {
     ThrottlerModule.forRoot([{ ttl: 60000, limit: 30 }]),
     PrismaModule,
     AuthModule,
+    UsersModule,
+    CoopsModule,
   ],
   providers: [
     { provide: APP_FILTER, useClass: AllExceptionsFilter },
