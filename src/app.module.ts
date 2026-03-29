@@ -14,6 +14,10 @@ import { DeliveriesModule } from './deliveries';
 import { PaymentsModule } from './payments';
 import { ExpenseCategoriesModule } from './expense-categories';
 import { ExpensesModule } from './expenses';
+import { ReportsModule } from './reports';
+import { CalendarModule } from './calendar';
+import { AuditLogsModule } from './audit-logs';
+import { PublicPricesModule } from './public-prices';
 import { AllExceptionsFilter } from './common/filters';
 import {
   BigIntSerializerInterceptor,
@@ -36,6 +40,10 @@ import {
     PaymentsModule,
     ExpenseCategoriesModule,
     ExpensesModule,
+    ReportsModule,
+    CalendarModule,
+    AuditLogsModule,
+    PublicPricesModule,
   ],
   providers: [
     { provide: APP_FILTER, useClass: AllExceptionsFilter },
