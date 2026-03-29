@@ -110,6 +110,7 @@ export class AuthService {
       data: {
         passwordHash: newHash,
         updatedById: userId,
+        updatedAt: new Date(),
       },
     });
 

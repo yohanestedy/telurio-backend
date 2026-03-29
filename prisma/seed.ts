@@ -35,6 +35,7 @@ async function seedAdminAccount() {
         deletedById: null,
         deleteReason: null,
         updatedById: existing.id,
+        updatedAt: new Date(),
       },
     });
 
@@ -53,7 +54,6 @@ async function seedAdminAccount() {
       role: Role.ADMIN,
       isActive: true,
       createdById: newId,
-      updatedById: newId,
     },
   });
 

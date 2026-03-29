@@ -85,7 +85,6 @@ export class CoopsService {
           : null,
         depreciationPercent: dto.depreciationPercent ?? 15,
         createdById: actor.id,
-        updatedById: actor.id,
       },
       select: {
         id: true,
@@ -136,6 +135,7 @@ export class CoopsService {
     const now = new Date();
     const data: Prisma.CoopUpdateInput = {
       updatedById: actor.id,
+      updatedAt: now,
     };
 
     if (dto.name !== undefined) {

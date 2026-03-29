@@ -6,6 +6,7 @@ import { PrismaModule } from './prisma';
 import { AuthModule, JwtAuthGuard, RolesGuard } from './auth';
 import { UsersModule } from './users';
 import { CoopsModule } from './coops';
+import { CustomersModule } from './customers';
 import { AllExceptionsFilter } from './common/filters';
 import {
   BigIntSerializerInterceptor,
@@ -20,6 +21,7 @@ import {
     AuthModule,
     UsersModule,
     CoopsModule,
+    CustomersModule,
   ],
   providers: [
     { provide: APP_FILTER, useClass: AllExceptionsFilter },

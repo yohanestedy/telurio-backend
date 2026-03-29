@@ -56,7 +56,7 @@ model User {
   deletedById            String?           @db.Uuid
   deleteReason           String?
   createdAt              DateTime          @default(now())
-  updatedAt              DateTime          @updatedAt
+  updatedAt              DateTime?
   coopAccesses           UserCoopAccess[]
   ownedExpenseCategories ExpenseCategory[]
 
@@ -78,7 +78,7 @@ model Coop {
   deletedById         String?                 @db.Uuid
   deleteReason        String?
   createdAt           DateTime                @default(now())
-  updatedAt           DateTime                @updatedAt
+  updatedAt           DateTime?
   userAccesses        UserCoopAccess[]
   productionRecords   ProductionRecord[]
   orderAllocations    OrderSourceAllocation[]
@@ -100,7 +100,7 @@ model UserCoopAccess {
   deletedById           String?   @db.Uuid
   deleteReason          String?
   createdAt             DateTime  @default(now())
-  updatedAt             DateTime  @updatedAt
+  updatedAt             DateTime?
   user                  User      @relation(fields: [userId], references: [id])
   coop                  Coop      @relation(fields: [coopId], references: [id])
 
@@ -120,7 +120,7 @@ model Customer {
   deletedById  String?   @db.Uuid
   deleteReason String?
   createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
+  updatedAt    DateTime?
   orders       Order[]
 
   @@index([name])
@@ -143,7 +143,7 @@ model ProductionRecord {
   deletedById    String?   @db.Uuid
   deleteReason   String?
   createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
+  updatedAt      DateTime?
   coop           Coop      @relation(fields: [coopId], references: [id])
 
   @@unique([date, coopId, collectionTime])
@@ -157,12 +157,12 @@ model EggPrice {
   pricePerKg    BigInt    @db.BigInt
   notes         String?
   createdById   String?   @db.Uuid
-  updatedById   String    @db.Uuid
+  updatedById   String?   @db.Uuid
   deletedAt     DateTime?
   deletedById   String?   @db.Uuid
   deleteReason  String?
   createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  updatedAt     DateTime?
 
   @@unique([effectiveDate])
   @@index([deletedAt])
@@ -197,7 +197,7 @@ model Order {
   cancelReason     String?
   cancelNotes      String?
   createdAt        DateTime                @default(now())
-  updatedAt        DateTime                @updatedAt
+  updatedAt        DateTime?
   customer         Customer                @relation(fields: [customerId], references: [id])
   allocations      OrderSourceAllocation[]
   paymentHistories PaymentHistory[]
@@ -208,16 +208,16 @@ model Order {
 }
 
 model OrderSourceAllocation {
-  id           String   @id @db.Uuid
-  orderId      String   @db.Uuid
-  coopId       String   @db.Uuid
-  quantityKg   Decimal  @db.Decimal(12, 3)
-  assignedById String   @db.Uuid
-  updatedById  String?  @db.Uuid
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-  order        Order    @relation(fields: [orderId], references: [id])
-  coop         Coop     @relation(fields: [coopId], references: [id])
+  id           String    @id @db.Uuid
+  orderId      String    @db.Uuid
+  coopId       String    @db.Uuid
+  quantityKg   Decimal   @db.Decimal(12, 3)
+  assignedById String    @db.Uuid
+  updatedById  String?   @db.Uuid
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime?
+  order        Order     @relation(fields: [orderId], references: [id])
+  coop         Coop      @relation(fields: [coopId], references: [id])
 
   @@index([orderId])
   @@index([coopId])
@@ -249,7 +249,7 @@ model ExpenseCategory {
   deletedById  String?   @db.Uuid
   deleteReason String?
   createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
+  updatedAt    DateTime?
   owner        User      @relation(fields: [ownerId], references: [id])
   expenses     Expense[]
 
@@ -272,7 +272,7 @@ model Expense {
   deletedById       String?          @db.Uuid
   deleteReason      String?
   createdAt         DateTime         @default(now())
-  updatedAt         DateTime         @updatedAt
+  updatedAt         DateTime?
   coop              Coop             @relation(fields: [coopId], references: [id])
   expenseCategory   ExpenseCategory? @relation(fields: [expenseCategoryId], references: [id])
 

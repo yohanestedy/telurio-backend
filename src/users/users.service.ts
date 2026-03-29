@@ -112,7 +112,6 @@ export class UsersService {
           passwordHash,
           role: dto.role,
           createdById: actor.id,
-          updatedById: actor.id,
         },
       });
 
@@ -127,7 +126,6 @@ export class UsersService {
                 ? (access.ownershipSharePercent ?? null)
                 : null,
             createdById: actor.id,
-            updatedById: actor.id,
           })),
         });
       }
@@ -161,6 +159,7 @@ export class UsersService {
     await this.prisma.$transaction(async (tx) => {
       const updateData: Prisma.UserUpdateInput = {
         updatedById: actor.id,
+        updatedAt: new Date(),
       };
 
       if (dto.name !== undefined) {
@@ -200,7 +199,6 @@ export class UsersService {
                   ? (access.ownershipSharePercent ?? null)
                   : null,
               createdById: actor.id,
-              updatedById: actor.id,
             })),
           });
         }
