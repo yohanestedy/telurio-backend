@@ -7,6 +7,11 @@ import { AuthModule, JwtAuthGuard, RolesGuard } from './auth';
 import { UsersModule } from './users';
 import { CoopsModule } from './coops';
 import { CustomersModule } from './customers';
+import { EggPricesModule } from './egg-prices';
+import { ProductionsModule } from './productions';
+import { OrdersModule } from './orders';
+import { DeliveriesModule } from './deliveries';
+import { PaymentsModule } from './payments';
 import { AllExceptionsFilter } from './common/filters';
 import {
   BigIntSerializerInterceptor,
@@ -22,6 +27,11 @@ import {
     UsersModule,
     CoopsModule,
     CustomersModule,
+    EggPricesModule,
+    ProductionsModule,
+    OrdersModule,
+    DeliveriesModule,
+    PaymentsModule,
   ],
   providers: [
     { provide: APP_FILTER, useClass: AllExceptionsFilter },
