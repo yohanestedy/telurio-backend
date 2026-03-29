@@ -12,6 +12,8 @@ import { ProductionsModule } from './productions';
 import { OrdersModule } from './orders';
 import { DeliveriesModule } from './deliveries';
 import { PaymentsModule } from './payments';
+import { ExpenseCategoriesModule } from './expense-categories';
+import { ExpensesModule } from './expenses';
 import { AllExceptionsFilter } from './common/filters';
 import {
   BigIntSerializerInterceptor,
@@ -32,6 +34,8 @@ import {
     OrdersModule,
     DeliveriesModule,
     PaymentsModule,
+    ExpenseCategoriesModule,
+    ExpensesModule,
   ],
   providers: [
     { provide: APP_FILTER, useClass: AllExceptionsFilter },
