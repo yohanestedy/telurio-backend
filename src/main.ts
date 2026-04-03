@@ -1,22 +1,24 @@
 import { NestFactory } from '@nestjs/core';
-import { ValidationPipe } from '@nestjs/common';
+import { INestApplication, ValidationPipe } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import helmet from 'helmet';
 import { AppModule } from './app.module';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  const app: INestApplication = await NestFactory.create(AppModule);
+  const configService = app.get(ConfigService);
 
-  // Required for Vercel's proxy
-  const expressApp = app.getHttpAdapter().getInstance();
-  expressApp.set('trust proxy', 1);
+  const apiPrefix = configService.get<string>('API_PREFIX') ?? 'api';
+  const port = Number(configService.get<string>('PORT') ?? '3000');
+  const allowedOrigin = configService.get<string>('ALLOWED_ORIGIN') ?? '*';
 
-  app.setGlobalPrefix('api');
+  app.setGlobalPrefix(apiPrefix);
 
   app.use(helmet());
 
   app.enableCors({
-    origin: process.env.ALLOWED_ORIGIN || '*',
+    origin: allowedOrigin,
     credentials: true,
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
   });
@@ -36,8 +38,8 @@ async function bootstrap() {
     .addBearerAuth()
     .build();
   const document = SwaggerModule.createDocument(app, swaggerConfig);
-  SwaggerModule.setup('api/docs', app, document);
+  SwaggerModule.setup(`${apiPrefix}/docs`, app, document);
 
-  await app.listen(process.env.PORT ?? 3000);
+  await app.listen(port);
 }
-bootstrap();
+void bootstrap();
