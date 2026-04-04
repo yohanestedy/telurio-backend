@@ -36,6 +36,7 @@ async function bootstrap() {
     .setDescription('Egg Farm Management System')
     .setVersion('1.0')
     .addBearerAuth()
+    .addServer('/')
     .build();
   const document = SwaggerModule.createDocument(app, swaggerConfig);
   SwaggerModule.setup(`${apiPrefix}/docs`, app, document);
