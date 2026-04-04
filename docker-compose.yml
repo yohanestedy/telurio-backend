@@ -1,0 +1,23 @@
+version: '3.8'
+
+services:
+  backend:
+    container_name: telurio-backend
+    build:
+      context: .
+      dockerfile: Dockerfile
+    env_file:
+      - .env
+    ports:
+      - "3000:3000"
+    restart: unless-stopped
+    networks:
+      - telurio-net
+    logging:
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+networks:
+  telurio-net:
+    driver: bridge
