@@ -28,47 +28,82 @@
 ## Project setup
 
 ```bash
-$ npm install
+# Install dependencies
+npm install
 ```
 
-## Compile and run the project
+## Compile and run the project (local development)
 
 ```bash
 # development
-$ npm run start
+npm run start
 
 # watch mode
-$ npm run start:dev
+npm run start:dev
 
 # production mode
-$ npm run start:prod
+npm run build
+npm run start:prod
 ```
 
 ## Run tests
 
 ```bash
 # unit tests
-$ npm run test
+npm run test
 
 # e2e tests
-$ npm run test:e2e
+npm run test:e2e
 
 # test coverage
-$ npm run test:cov
+npm run test:cov
 ```
 
-## Deployment
+## Deployment (Manual VPS with Docker Compose)
 
-When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
-
-If you are looking for a cloud-based platform to deploy your NestJS application, check out [Mau](https://mau.nestjs.com), our official platform for deploying NestJS applications on AWS. Mau makes deployment straightforward and fast, requiring just a few simple steps:
+1. **Clone repository di VPS Anda:**
 
 ```bash
-$ npm install -g @nestjs/mau
-$ mau deploy
+git clone <repo-url>
+cd backend
 ```
 
-With Mau, you can deploy your application in just a few clicks, allowing you to focus on building features rather than managing infrastructure.
+2. **Edit file `.env`**
+
+- Pastikan variabel `DATABASE_URL` sudah mengarah ke database PostgreSQL Anda (misal Neon).
+- Atur variabel lain sesuai kebutuhan (lihat contoh di `.env`).
+
+3. **Jalankan aplikasi dengan Docker Compose:**
+
+```bash
+docker compose up -d --build
+```
+
+Ini akan membuild image dan menjalankan container backend.
+
+4. **Update aplikasi setelah ada perubahan kode:**
+
+```bash
+git pull
+docker compose up -d --build
+```
+
+Ini akan rebuild image dan restart container dengan kode terbaru.
+
+5. **Membersihkan container dan image lama (opsional):**
+
+```bash
+docker compose down
+docker image prune -f
+```
+
+## Notes
+
+- Service database tidak dijalankan di VPS, gunakan layanan database eksternal (misal Neon, Supabase, dsb).
+- Semua konfigurasi environment diatur lewat file `.env`.
+- Port default aplikasi: `3000` (lihat variabel `PORT` di `.env`).
+
+---
 
 ## Resources
 
