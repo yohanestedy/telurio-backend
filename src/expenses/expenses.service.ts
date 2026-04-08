@@ -4,6 +4,7 @@ import dayjs from 'dayjs';
 import { PrismaService } from '../prisma';
 import {
   BusinessRuleException,
+  buildPaginationMeta,
   ForbiddenException,
   NotFoundException,
   generateUuidV7,
@@ -25,6 +26,13 @@ export class ExpensesService {
   constructor(private prisma: PrismaService) {}
 
   async listExpenses(user: AuthUser, query: QueryExpensesDto) {
+    const orderByMap: Record<string, Prisma.ExpenseOrderByWithRelationInput> = {
+      date: { date: query.order },
+      createdAt: { createdAt: query.order },
+      amount: { amount: query.order },
+      categoryLabel: { categoryLabel: query.order },
+    };
+
     const ownerCoopIds = await this.getOwnerCoopIds(user);
 
     if (user.role === Role.OWNER) {
@@ -54,13 +62,18 @@ export class ExpensesService {
       ...(user.role === Role.ADMIN ? {} : { coopId: { in: ownerCoopIds } }),
     };
 
+    const orderBy: Prisma.ExpenseOrderByWithRelationInput[] =
+      query.sortBy === 'createdAt'
+        ? [orderByMap[query.sortBy]]
+        : [orderByMap[query.sortBy], { createdAt: 'desc' }];
+
     const [total, rows] = await this.prisma.$transaction([
       this.prisma.expense.count({ where }),
       this.prisma.expense.findMany({
         where,
         skip: query.skip,
         take: query.limit,
-        orderBy: [{ date: 'desc' }, { createdAt: 'desc' }],
+        orderBy,
         include: {
           coop: { select: { name: true } },
         },
@@ -88,11 +101,20 @@ export class ExpensesService {
         createdByName: creatorMap.get(item.createdById) ?? null,
         createdAt: item.createdAt,
       })),
-      meta: {
-        total,
+      meta: buildPaginationMeta({
         page: query.page,
         limit: query.limit,
-      },
+        total,
+        sortBy: query.sortBy,
+        order: query.order,
+        filters: {
+          coopId: query.coopId,
+          ownerId: query.ownerId,
+          startDate: query.startDate,
+          endDate: query.endDate,
+          expenseCategoryId: query.expenseCategoryId,
+        },
+      }),
     };
   }
 

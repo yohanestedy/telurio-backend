@@ -1,8 +1,12 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma, Role } from '@prisma/client';
 import { PrismaService } from '../prisma';
-import { generateUuidV7 } from '../common';
-import { ConflictException, NotFoundException } from '../common';
+import {
+  buildPaginationMeta,
+  ConflictException,
+  generateUuidV7,
+  NotFoundException,
+} from '../common';
 import { CreateCoopDto, QueryCoopsDto, UpdateCoopDto } from './dto';
 
 interface AuthUserContext {
@@ -15,6 +19,13 @@ export class CoopsService {
   constructor(private prisma: PrismaService) {}
 
   async listCoops(user: AuthUserContext, query: QueryCoopsDto) {
+    const orderByMap: Record<string, Prisma.CoopOrderByWithRelationInput> = {
+      createdAt: { createdAt: query.order },
+      updatedAt: { updatedAt: query.order },
+      name: { name: query.order },
+      population: { population: query.order },
+    };
+
     const where: Prisma.CoopWhereInput = {
       deletedAt: null,
       ...(query.isActive !== undefined ? { isActive: query.isActive } : {}),
@@ -36,7 +47,7 @@ export class CoopsService {
         where,
         skip: query.skip,
         take: query.limit,
-        orderBy: { createdAt: 'desc' },
+        orderBy: orderByMap[query.sortBy],
         select: {
           id: true,
           name: true,
@@ -56,11 +67,16 @@ export class CoopsService {
         ...coop,
         depreciationPercent: coop.depreciationPercent.toString(),
       })),
-      meta: {
-        total,
+      meta: buildPaginationMeta({
         page: query.page,
         limit: query.limit,
-      },
+        total,
+        sortBy: query.sortBy,
+        order: query.order,
+        filters: {
+          isActive: query.isActive,
+        },
+      }),
     };
   }
 

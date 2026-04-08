@@ -1,7 +1,24 @@
-import { IsDateString, IsOptional, IsString, IsUUID } from 'class-validator';
+import {
+  IsDateString,
+  IsIn,
+  IsOptional,
+  IsString,
+  IsUUID,
+} from 'class-validator';
 import { PaginationDto } from '../../common';
 
+export const auditLogSortFields = [
+  'createdAt',
+  'entityType',
+  'actionType',
+] as const;
+export type AuditLogSortField = (typeof auditLogSortFields)[number];
+
 export class QueryAuditLogsDto extends PaginationDto {
+  @IsOptional()
+  @IsIn(auditLogSortFields)
+  sortBy: AuditLogSortField = 'createdAt';
+
   @IsOptional()
   @IsString()
   entityType?: string;

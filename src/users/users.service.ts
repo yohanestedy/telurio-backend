@@ -2,10 +2,11 @@ import { Injectable } from '@nestjs/common';
 import { Prisma, Role } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 import { PrismaService } from '../prisma';
-import { generateUuidV7 } from '../common';
 import {
   BusinessRuleException,
+  buildPaginationMeta,
   ConflictException,
+  generateUuidV7,
   NotFoundException,
 } from '../common';
 import {
@@ -24,6 +25,13 @@ export class UsersService {
   constructor(private prisma: PrismaService) {}
 
   async listUsers(query: QueryUsersDto) {
+    const orderByMap: Record<string, Prisma.UserOrderByWithRelationInput> = {
+      createdAt: { createdAt: query.order },
+      name: { name: query.order },
+      username: { username: query.order },
+      role: { role: query.order },
+    };
+
     const where: Prisma.UserWhereInput = {
       deletedAt: null,
       ...(query.role ? { role: query.role } : {}),
@@ -43,7 +51,7 @@ export class UsersService {
         where,
         skip: query.skip,
         take: query.limit,
-        orderBy: { createdAt: 'desc' },
+        orderBy: orderByMap[query.sortBy],
         select: {
           id: true,
           name: true,
@@ -80,11 +88,18 @@ export class UsersService {
             : null,
         })),
       })),
-      meta: {
-        total,
+      meta: buildPaginationMeta({
         page: query.page,
         limit: query.limit,
-      },
+        total,
+        sortBy: query.sortBy,
+        order: query.order,
+        filters: {
+          role: query.role,
+          isActive: query.isActive,
+          coopId: query.coopId,
+        },
+      }),
     };
   }
 

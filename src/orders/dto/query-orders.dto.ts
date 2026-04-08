@@ -3,10 +3,31 @@ import {
   OrderLifecycleStatus,
   PaymentStatus,
 } from '@prisma/client';
-import { IsDateString, IsEnum, IsOptional, IsUUID } from 'class-validator';
+import {
+  IsDateString,
+  IsEnum,
+  IsIn,
+  IsOptional,
+  IsUUID,
+} from 'class-validator';
 import { PaginationDto } from '../../common';
 
+export const orderSortFields = [
+  'deliveryDate',
+  'createdAt',
+  'quantityKg',
+  'deliveryStatus',
+  'paymentStatus',
+] as const;
+export type OrderSortField = (typeof orderSortFields)[number];
+
 export class QueryOrdersDto extends PaginationDto {
+  @IsOptional()
+  @IsIn(orderSortFields)
+  sortBy: OrderSortField = 'deliveryDate';
+
+  order: 'asc' | 'desc' = 'asc';
+
   @IsOptional()
   @IsDateString()
   deliveryDate?: string;

@@ -5,6 +5,7 @@ import {
   ConflictException,
   ForbiddenException,
   NotFoundException,
+  buildPaginationMeta,
   generateUuidV7,
 } from '../common';
 import {
@@ -24,6 +25,16 @@ export class ProductionsService {
   constructor(private prisma: PrismaService) {}
 
   async listProductions(user: AuthUser, query: QueryProductionsDto) {
+    const orderByMap: Record<
+      string,
+      Prisma.ProductionRecordOrderByWithRelationInput
+    > = {
+      date: { date: query.order },
+      createdAt: { createdAt: query.order },
+      goodKg: { goodKg: query.order },
+      goodCount: { goodCount: query.order },
+    };
+
     const allowedCoopIds = await this.getAllowedCoopIds(user);
 
     if (
@@ -54,13 +65,18 @@ export class ProductionsService {
           }),
     };
 
+    const orderBy: Prisma.ProductionRecordOrderByWithRelationInput[] =
+      query.sortBy === 'createdAt'
+        ? [orderByMap[query.sortBy]]
+        : [orderByMap[query.sortBy], { createdAt: 'desc' }];
+
     const [total, rows] = await this.prisma.$transaction([
       this.prisma.productionRecord.count({ where }),
       this.prisma.productionRecord.findMany({
         where,
         skip: query.skip,
         take: query.limit,
-        orderBy: [{ date: 'desc' }, { createdAt: 'desc' }],
+        orderBy,
         include: {
           coop: { select: { name: true } },
         },
@@ -88,11 +104,19 @@ export class ProductionsService {
         createdByName: userMap.get(row.createdById) ?? null,
         createdAt: row.createdAt,
       })),
-      meta: {
-        total,
+      meta: buildPaginationMeta({
         page: query.page,
         limit: query.limit,
-      },
+        total,
+        sortBy: query.sortBy,
+        order: query.order,
+        filters: {
+          coopId: query.coopId,
+          date: query.date,
+          startDate: query.startDate,
+          endDate: query.endDate,
+        },
+      }),
     };
   }
 

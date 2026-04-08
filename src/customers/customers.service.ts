@@ -13,6 +13,12 @@ export class CustomersService {
   constructor(private prisma: PrismaService) {}
 
   async listCustomers(query: QueryCustomersDto) {
+    const orderByMap = {
+      createdAt: { createdAt: query.order },
+      name: { name: query.order },
+      phone: { phone: query.order },
+    } satisfies Record<string, Prisma.CustomerOrderByWithRelationInput>;
+
     const deletedFilter =
       query.isDeleted === true
         ? { deletedAt: { not: null } }
@@ -40,7 +46,7 @@ export class CustomersService {
         where,
         skip: query.skip,
         take: query.limit,
-        orderBy: { createdAt: 'desc' },
+        orderBy: orderByMap[query.sortBy],
         select: {
           id: true,
           name: true,
@@ -51,12 +57,29 @@ export class CustomersService {
       }),
     ]);
 
+    const rawFilters = {
+      search: query.search,
+      isDeleted: query.isDeleted,
+    };
+
+    const filters = Object.fromEntries(
+      Object.entries(rawFilters).filter(([, value]) => value !== undefined),
+    );
+
+    const totalPages = total === 0 ? 0 : Math.ceil(total / query.limit);
+
     return {
       data: customers,
       meta: {
-        total,
         page: query.page,
         limit: query.limit,
+        total,
+        totalPages,
+        hasNextPage: query.page < totalPages,
+        hasPrevPage: query.page > 1,
+        sortBy: query.sortBy,
+        order: query.order,
+        filters,
       },
     };
   }

@@ -71,13 +71,26 @@ export class OrdersService {
         : {}),
     };
 
+    const orderByMap: Record<string, Prisma.OrderOrderByWithRelationInput> = {
+      deliveryDate: { deliveryDate: query.order },
+      createdAt: { createdAt: query.order },
+      quantityKg: { quantityKg: query.order },
+      deliveryStatus: { deliveryStatus: query.order },
+      paymentStatus: { paymentStatus: query.order },
+    };
+
+    const orderBy: Prisma.OrderOrderByWithRelationInput[] =
+      query.sortBy === 'createdAt'
+        ? [orderByMap[query.sortBy]]
+        : [orderByMap[query.sortBy], { createdAt: 'desc' }];
+
     const [total, rows] = await this.prisma.$transaction([
       this.prisma.order.count({ where }),
       this.prisma.order.findMany({
         where,
         skip: query.skip,
         take: query.limit,
-        orderBy: [{ deliveryDate: 'asc' }, { createdAt: 'desc' }],
+        orderBy,
         include: {
           customer: { select: { id: true, name: true, phone: true } },
         },
@@ -90,6 +103,22 @@ export class OrdersService {
       select: { id: true, name: true },
     });
     const creatorMap = new Map(creators.map((item) => [item.id, item.name]));
+
+    const rawFilters = {
+      deliveryDate: query.deliveryDate,
+      deliveryStatus: query.deliveryStatus,
+      paymentStatus: query.paymentStatus,
+      lifecycleStatus: query.lifecycleStatus,
+      customerId: query.customerId,
+      startDate: query.startDate,
+      endDate: query.endDate,
+    };
+
+    const filters = Object.fromEntries(
+      Object.entries(rawFilters).filter(([, value]) => value !== undefined),
+    );
+
+    const totalPages = total === 0 ? 0 : Math.ceil(total / query.limit);
 
     return {
       data: rows.map((row) => ({
@@ -110,9 +139,15 @@ export class OrdersService {
         createdAt: row.createdAt,
       })),
       meta: {
-        total,
         page: query.page,
         limit: query.limit,
+        total,
+        totalPages,
+        hasNextPage: query.page < totalPages,
+        hasPrevPage: query.page > 1,
+        sortBy: query.sortBy,
+        order: query.order,
+        filters,
       },
     };
   }

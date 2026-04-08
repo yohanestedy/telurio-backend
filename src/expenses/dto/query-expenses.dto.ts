@@ -1,7 +1,19 @@
-import { IsDateString, IsOptional, IsUUID } from 'class-validator';
+import { IsDateString, IsIn, IsOptional, IsUUID } from 'class-validator';
 import { PaginationDto } from '../../common';
 
+export const expenseSortFields = [
+  'date',
+  'createdAt',
+  'amount',
+  'categoryLabel',
+] as const;
+export type ExpenseSortField = (typeof expenseSortFields)[number];
+
 export class QueryExpensesDto extends PaginationDto {
+  @IsOptional()
+  @IsIn(expenseSortFields)
+  sortBy: ExpenseSortField = 'date';
+
   @IsOptional()
   @IsUUID()
   coopId?: string;

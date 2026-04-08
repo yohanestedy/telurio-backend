@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma, Role } from '@prisma/client';
 import { PrismaService } from '../prisma';
-import { ForbiddenException } from '../common';
+import { buildPaginationMeta, ForbiddenException } from '../common';
 import { QueryAuditLogsDto } from './dto';
 
 interface AuthUser {
@@ -14,6 +14,13 @@ export class AuditLogsService {
   constructor(private prisma: PrismaService) {}
 
   async listLogs(user: AuthUser, query: QueryAuditLogsDto) {
+    const orderByMap: Record<string, Prisma.AuditLogOrderByWithRelationInput> =
+      {
+        createdAt: { createdAt: query.order },
+        entityType: { entityType: query.order },
+        actionType: { actionType: query.order },
+      };
+
     const where = await this.buildWhere(user, query);
 
     const [total, rows] = await this.prisma.$transaction([
@@ -22,7 +29,7 @@ export class AuditLogsService {
         where,
         skip: query.skip,
         take: query.limit,
-        orderBy: { createdAt: 'desc' },
+        orderBy: orderByMap[query.sortBy],
       }),
     ]);
 
@@ -40,11 +47,21 @@ export class AuditLogsService {
         metadataJson: row.metadataJson,
         createdAt: row.createdAt,
       })),
-      meta: {
-        total,
+      meta: buildPaginationMeta({
         page: query.page,
         limit: query.limit,
-      },
+        total,
+        sortBy: query.sortBy,
+        order: query.order,
+        filters: {
+          entityType: query.entityType,
+          entityId: query.entityId,
+          actorUserId: query.actorUserId,
+          coopId: query.coopId,
+          startDate: query.startDate,
+          endDate: query.endDate,
+        },
+      }),
     };
   }
 

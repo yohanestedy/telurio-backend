@@ -1,7 +1,19 @@
-import { IsDateString, IsOptional, IsUUID } from 'class-validator';
+import { IsDateString, IsIn, IsOptional, IsUUID } from 'class-validator';
 import { PaginationDto } from '../../common';
 
+export const productionSortFields = [
+  'date',
+  'createdAt',
+  'goodKg',
+  'goodCount',
+] as const;
+export type ProductionSortField = (typeof productionSortFields)[number];
+
 export class QueryProductionsDto extends PaginationDto {
+  @IsOptional()
+  @IsIn(productionSortFields)
+  sortBy: ProductionSortField = 'date';
+
   @IsOptional()
   @IsUUID()
   coopId?: string;

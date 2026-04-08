@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma';
 import {
+  buildPaginationMeta,
   ConflictException,
   NotFoundException,
   generateUuidV7,
@@ -40,6 +41,13 @@ export class EggPricesService {
   }
 
   async listPrices(query: QueryEggPricesDto) {
+    const orderByMap: Record<string, Prisma.EggPriceOrderByWithRelationInput> =
+      {
+        effectiveDate: { effectiveDate: query.order },
+        createdAt: { createdAt: query.order },
+        pricePerKg: { pricePerKg: query.order },
+      };
+
     const where: Prisma.EggPriceWhereInput = {
       deletedAt: null,
       ...(query.startDate || query.endDate
@@ -58,7 +66,7 @@ export class EggPricesService {
         where,
         skip: query.skip,
         take: query.limit,
-        orderBy: { effectiveDate: 'desc' },
+        orderBy: orderByMap[query.sortBy],
       }),
     ]);
 
@@ -68,11 +76,17 @@ export class EggPricesService {
 
     return {
       data,
-      meta: {
-        total,
+      meta: buildPaginationMeta({
         page: query.page,
         limit: query.limit,
-      },
+        total,
+        sortBy: query.sortBy,
+        order: query.order,
+        filters: {
+          startDate: query.startDate,
+          endDate: query.endDate,
+        },
+      }),
     };
   }
 

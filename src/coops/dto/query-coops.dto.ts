@@ -1,8 +1,20 @@
 import { Transform, Type } from 'class-transformer';
-import { IsBoolean, IsOptional } from 'class-validator';
+import { IsBoolean, IsIn, IsOptional } from 'class-validator';
 import { PaginationDto } from '../../common';
 
+export const coopSortFields = [
+  'createdAt',
+  'updatedAt',
+  'name',
+  'population',
+] as const;
+export type CoopSortField = (typeof coopSortFields)[number];
+
 export class QueryCoopsDto extends PaginationDto {
+  @IsOptional()
+  @IsIn(coopSortFields)
+  sortBy: CoopSortField = 'createdAt';
+
   @IsOptional()
   @Transform(({ value }: { value: unknown }) => {
     if (value === 'true') return true;

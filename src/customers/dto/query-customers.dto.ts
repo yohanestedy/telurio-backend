@@ -1,8 +1,15 @@
 import { Transform, Type } from 'class-transformer';
-import { IsBoolean, IsOptional, IsString, Length } from 'class-validator';
+import { IsBoolean, IsIn, IsOptional, IsString, Length } from 'class-validator';
 import { PaginationDto } from '../../common';
 
+export const customerSortFields = ['createdAt', 'name', 'phone'] as const;
+export type CustomerSortField = (typeof customerSortFields)[number];
+
 export class QueryCustomersDto extends PaginationDto {
+  @IsOptional()
+  @IsIn(customerSortFields)
+  sortBy: CustomerSortField = 'createdAt';
+
   @IsOptional()
   @IsString()
   @Length(1, 120)
