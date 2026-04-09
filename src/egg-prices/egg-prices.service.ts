@@ -64,8 +64,8 @@ export class EggPricesService {
       this.prisma.eggPrice.count({ where }),
       this.prisma.eggPrice.findMany({
         where,
-        skip: query.skip,
-        take: query.limit,
+        skip: query.offset,
+        take: query.take,
         orderBy: orderByMap[query.sortBy],
       }),
     ]);
@@ -82,7 +82,9 @@ export class EggPricesService {
         total,
         sortBy: query.sortBy,
         order: query.order,
+        all: query.all,
         filters: {
+          all: query.all,
           startDate: query.startDate,
           endDate: query.endDate,
         },

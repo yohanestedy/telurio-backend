@@ -71,8 +71,8 @@ export class ExpensesService {
       this.prisma.expense.count({ where }),
       this.prisma.expense.findMany({
         where,
-        skip: query.skip,
-        take: query.limit,
+        skip: query.offset,
+        take: query.take,
         orderBy,
         include: {
           coop: { select: { name: true } },
@@ -107,7 +107,9 @@ export class ExpensesService {
         total,
         sortBy: query.sortBy,
         order: query.order,
+        all: query.all,
         filters: {
+          all: query.all,
           coopId: query.coopId,
           ownerId: query.ownerId,
           startDate: query.startDate,

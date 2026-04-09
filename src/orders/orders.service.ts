@@ -10,6 +10,7 @@ import dayjs from 'dayjs';
 import { PrismaService } from '../prisma';
 import {
   BusinessRuleException,
+  buildPaginationMeta,
   ForbiddenException,
   NotFoundException,
   generateUuidV7,
@@ -88,8 +89,8 @@ export class OrdersService {
       this.prisma.order.count({ where }),
       this.prisma.order.findMany({
         where,
-        skip: query.skip,
-        take: query.limit,
+        skip: query.offset,
+        take: query.take,
         orderBy,
         include: {
           customer: { select: { id: true, name: true, phone: true } },
@@ -103,22 +104,6 @@ export class OrdersService {
       select: { id: true, name: true },
     });
     const creatorMap = new Map(creators.map((item) => [item.id, item.name]));
-
-    const rawFilters = {
-      deliveryDate: query.deliveryDate,
-      deliveryStatus: query.deliveryStatus,
-      paymentStatus: query.paymentStatus,
-      lifecycleStatus: query.lifecycleStatus,
-      customerId: query.customerId,
-      startDate: query.startDate,
-      endDate: query.endDate,
-    };
-
-    const filters = Object.fromEntries(
-      Object.entries(rawFilters).filter(([, value]) => value !== undefined),
-    );
-
-    const totalPages = total === 0 ? 0 : Math.ceil(total / query.limit);
 
     return {
       data: rows.map((row) => ({
@@ -138,17 +123,24 @@ export class OrdersService {
         createdByName: creatorMap.get(row.createdById) ?? null,
         createdAt: row.createdAt,
       })),
-      meta: {
+      meta: buildPaginationMeta({
         page: query.page,
         limit: query.limit,
         total,
-        totalPages,
-        hasNextPage: query.page < totalPages,
-        hasPrevPage: query.page > 1,
         sortBy: query.sortBy,
         order: query.order,
-        filters,
-      },
+        all: query.all,
+        filters: {
+          all: query.all,
+          deliveryDate: query.deliveryDate,
+          deliveryStatus: query.deliveryStatus,
+          paymentStatus: query.paymentStatus,
+          lifecycleStatus: query.lifecycleStatus,
+          customerId: query.customerId,
+          startDate: query.startDate,
+          endDate: query.endDate,
+        },
+      }),
     };
   }
 

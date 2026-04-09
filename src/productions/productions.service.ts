@@ -74,8 +74,8 @@ export class ProductionsService {
       this.prisma.productionRecord.count({ where }),
       this.prisma.productionRecord.findMany({
         where,
-        skip: query.skip,
-        take: query.limit,
+        skip: query.offset,
+        take: query.take,
         orderBy,
         include: {
           coop: { select: { name: true } },
@@ -110,7 +110,9 @@ export class ProductionsService {
         total,
         sortBy: query.sortBy,
         order: query.order,
+        all: query.all,
         filters: {
+          all: query.all,
           coopId: query.coopId,
           date: query.date,
           startDate: query.startDate,

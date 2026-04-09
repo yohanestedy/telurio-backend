@@ -27,8 +27,8 @@ export class AuditLogsService {
       this.prisma.auditLog.count({ where }),
       this.prisma.auditLog.findMany({
         where,
-        skip: query.skip,
-        take: query.limit,
+        skip: query.offset,
+        take: query.take,
         orderBy: orderByMap[query.sortBy],
       }),
     ]);
@@ -53,7 +53,9 @@ export class AuditLogsService {
         total,
         sortBy: query.sortBy,
         order: query.order,
+        all: query.all,
         filters: {
+          all: query.all,
           entityType: query.entityType,
           entityId: query.entityId,
           actorUserId: query.actorUserId,

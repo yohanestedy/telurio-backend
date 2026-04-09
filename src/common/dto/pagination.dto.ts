@@ -1,5 +1,5 @@
 import { Transform, Type } from 'class-transformer';
-import { IsIn, IsInt, IsOptional, Max, Min } from 'class-validator';
+import { IsBoolean, IsIn, IsInt, IsOptional, Max, Min } from 'class-validator';
 
 export const sortOrders = ['asc', 'desc'] as const;
 export type SortOrder = (typeof sortOrders)[number];
@@ -24,6 +24,7 @@ interface BuildPaginationMetaOptions {
   total: number;
   sortBy: string;
   order: SortOrder;
+  all?: boolean;
   filters?: PaginationFilters;
 }
 
@@ -50,16 +51,24 @@ function sanitizeFilters(filters: PaginationFilters = {}): PaginationFilters {
 export function buildPaginationMeta(
   options: BuildPaginationMetaOptions,
 ): PaginationMeta {
-  const totalPages =
-    options.total === 0 ? 0 : Math.ceil(options.total / options.limit);
+  const isAllMode = options.all === true;
+  const page = isAllMode ? 1 : options.page;
+  const limit = isAllMode ? options.total : options.limit;
+  const totalPages = isAllMode
+    ? options.total === 0
+      ? 0
+      : 1
+    : options.total === 0
+      ? 0
+      : Math.ceil(options.total / options.limit);
 
   return {
-    page: options.page,
-    limit: options.limit,
+    page,
+    limit,
     total: options.total,
     totalPages,
-    hasNextPage: options.page < totalPages,
-    hasPrevPage: options.page > 1,
+    hasNextPage: isAllMode ? false : page < totalPages,
+    hasPrevPage: isAllMode ? false : page > 1,
     sortBy: options.sortBy,
     order: options.order,
     filters: sanitizeFilters(options.filters),
@@ -87,7 +96,25 @@ export class PaginationDto {
   @IsIn(sortOrders)
   order: SortOrder = 'desc';
 
+  @IsOptional()
+  @Transform(({ value }: { value: unknown }) => {
+    if (value === true || value === 'true') return true;
+    if (value === false || value === 'false') return false;
+    return value;
+  })
+  @Type(() => Boolean)
+  @IsBoolean()
+  all: boolean = false;
+
   get skip(): number {
     return (this.page - 1) * this.limit;
+  }
+
+  get offset(): number | undefined {
+    return this.all ? undefined : this.skip;
+  }
+
+  get take(): number | undefined {
+    return this.all ? undefined : this.limit;
   }
 }

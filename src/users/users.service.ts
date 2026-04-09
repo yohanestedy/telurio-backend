@@ -49,8 +49,8 @@ export class UsersService {
       this.prisma.user.count({ where }),
       this.prisma.user.findMany({
         where,
-        skip: query.skip,
-        take: query.limit,
+        skip: query.offset,
+        take: query.take,
         orderBy: orderByMap[query.sortBy],
         select: {
           id: true,
@@ -94,7 +94,9 @@ export class UsersService {
         total,
         sortBy: query.sortBy,
         order: query.order,
+        all: query.all,
         filters: {
+          all: query.all,
           role: query.role,
           isActive: query.isActive,
           coopId: query.coopId,

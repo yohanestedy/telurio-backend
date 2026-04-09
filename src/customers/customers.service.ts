@@ -1,7 +1,11 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma';
-import { generateUuidV7, NotFoundException } from '../common';
+import {
+  buildPaginationMeta,
+  generateUuidV7,
+  NotFoundException,
+} from '../common';
 import { CreateCustomerDto, QueryCustomersDto, UpdateCustomerDto } from './dto';
 
 interface AuthUserContext {
@@ -44,8 +48,8 @@ export class CustomersService {
       this.prisma.customer.count({ where }),
       this.prisma.customer.findMany({
         where,
-        skip: query.skip,
-        take: query.limit,
+        skip: query.offset,
+        take: query.take,
         orderBy: orderByMap[query.sortBy],
         select: {
           id: true,
@@ -57,30 +61,21 @@ export class CustomersService {
       }),
     ]);
 
-    const rawFilters = {
-      search: query.search,
-      isDeleted: query.isDeleted,
-    };
-
-    const filters = Object.fromEntries(
-      Object.entries(rawFilters).filter(([, value]) => value !== undefined),
-    );
-
-    const totalPages = total === 0 ? 0 : Math.ceil(total / query.limit);
-
     return {
       data: customers,
-      meta: {
+      meta: buildPaginationMeta({
         page: query.page,
         limit: query.limit,
         total,
-        totalPages,
-        hasNextPage: query.page < totalPages,
-        hasPrevPage: query.page > 1,
         sortBy: query.sortBy,
         order: query.order,
-        filters,
-      },
+        all: query.all,
+        filters: {
+          all: query.all,
+          search: query.search,
+          isDeleted: query.isDeleted,
+        },
+      }),
     };
   }
 

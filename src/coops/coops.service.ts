@@ -45,8 +45,8 @@ export class CoopsService {
       this.prisma.coop.count({ where }),
       this.prisma.coop.findMany({
         where,
-        skip: query.skip,
-        take: query.limit,
+        skip: query.offset,
+        take: query.take,
         orderBy: orderByMap[query.sortBy],
         select: {
           id: true,
@@ -73,7 +73,9 @@ export class CoopsService {
         total,
         sortBy: query.sortBy,
         order: query.order,
+        all: query.all,
         filters: {
+          all: query.all,
           isActive: query.isActive,
         },
       }),
