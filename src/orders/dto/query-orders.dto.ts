@@ -10,7 +10,8 @@ import {
   IsOptional,
   IsUUID,
 } from 'class-validator';
-import { PaginationDto } from '../../common';
+import { PaginationDto, sortOrders } from '../../common';
+import type { SortOrder } from '../../common';
 
 export const orderSortFields = [
   'deliveryDate',
@@ -26,7 +27,9 @@ export class QueryOrdersDto extends PaginationDto {
   @IsIn(orderSortFields)
   sortBy: OrderSortField = 'deliveryDate';
 
-  order: 'asc' | 'desc' = 'asc';
+  @IsOptional()
+  @IsIn(sortOrders)
+  order: SortOrder = 'asc';
 
   @IsOptional()
   @IsDateString()

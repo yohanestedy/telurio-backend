@@ -1,5 +1,6 @@
 import { IsDateString, IsIn, IsOptional } from 'class-validator';
-import { PaginationDto } from '../../common';
+import { PaginationDto, sortOrders } from '../../common';
+import type { SortOrder } from '../../common';
 
 export const eggPriceSortFields = [
   'effectiveDate',
@@ -12,6 +13,10 @@ export class QueryEggPricesDto extends PaginationDto {
   @IsOptional()
   @IsIn(eggPriceSortFields)
   sortBy: EggPriceSortField = 'effectiveDate';
+
+  @IsOptional()
+  @IsIn(sortOrders)
+  order: SortOrder = 'asc';
 
   @IsOptional()
   @IsDateString()

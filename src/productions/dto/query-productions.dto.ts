@@ -1,5 +1,6 @@
 import { IsDateString, IsIn, IsOptional, IsUUID } from 'class-validator';
-import { PaginationDto } from '../../common';
+import { PaginationDto, sortOrders } from '../../common';
+import type { SortOrder } from '../../common';
 
 export const productionSortFields = [
   'date',
@@ -13,6 +14,10 @@ export class QueryProductionsDto extends PaginationDto {
   @IsOptional()
   @IsIn(productionSortFields)
   sortBy: ProductionSortField = 'date';
+
+  @IsOptional()
+  @IsIn(sortOrders)
+  order: SortOrder = 'asc';
 
   @IsOptional()
   @IsUUID()

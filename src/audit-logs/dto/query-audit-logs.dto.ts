@@ -5,7 +5,8 @@ import {
   IsString,
   IsUUID,
 } from 'class-validator';
-import { PaginationDto } from '../../common';
+import { PaginationDto, sortOrders } from '../../common';
+import type { SortOrder } from '../../common';
 
 export const auditLogSortFields = [
   'createdAt',
@@ -18,6 +19,10 @@ export class QueryAuditLogsDto extends PaginationDto {
   @IsOptional()
   @IsIn(auditLogSortFields)
   sortBy: AuditLogSortField = 'createdAt';
+
+  @IsOptional()
+  @IsIn(sortOrders)
+  order: SortOrder = 'asc';
 
   @IsOptional()
   @IsString()
