@@ -45,9 +45,15 @@ export class ProductionsService {
       throw new ForbiddenException('Coop is outside your scope');
     }
 
+    const coopFilter: Prisma.ProductionRecordWhereInput['coopId'] = query.coopId
+      ? query.coopId
+      : user.role === Role.ADMIN
+        ? undefined
+        : { in: allowedCoopIds };
+
     const where: Prisma.ProductionRecordWhereInput = {
       deletedAt: null,
-      ...(query.coopId ? { coopId: query.coopId } : {}),
+      ...(coopFilter ? { coopId: coopFilter } : {}),
       ...(query.date
         ? { date: new Date(query.date) }
         : query.startDate || query.endDate
@@ -58,11 +64,6 @@ export class ProductionsService {
               },
             }
           : {}),
-      ...(user.role === Role.ADMIN
-        ? {}
-        : {
-            coopId: { in: allowedCoopIds },
-          }),
     };
 
     const orderBy: Prisma.ProductionRecordOrderByWithRelationInput[] =
