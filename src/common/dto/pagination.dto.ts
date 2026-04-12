@@ -102,7 +102,6 @@ export class PaginationDto {
     if (value === false || value === 'false') return false;
     return value;
   })
-  @Type(() => Boolean)
   @IsBoolean()
   all: boolean = false;
 

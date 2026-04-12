@@ -1,4 +1,4 @@
-import { Transform, Type } from 'class-transformer';
+import { Transform } from 'class-transformer';
 import { IsBoolean, IsIn, IsOptional, IsString, Length } from 'class-validator';
 import { PaginationDto, sortOrders } from '../../common';
 import type { SortOrder } from '../../common';
@@ -22,11 +22,10 @@ export class QueryCustomersDto extends PaginationDto {
 
   @IsOptional()
   @Transform(({ value }: { value: unknown }) => {
-    if (value === 'true') return true;
-    if (value === 'false') return false;
-    return undefined;
+    if (value === true || value === 'true') return true;
+    if (value === false || value === 'false') return false;
+    return value;
   })
-  @Type(() => Boolean)
   @IsBoolean()
   isDeleted?: boolean;
 }
