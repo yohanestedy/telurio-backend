@@ -56,6 +56,15 @@ export class PaymentsService {
       throw new BusinessRuleException('LUNAS requires paymentMethod');
     }
 
+    if (
+      dto.paymentStatus === PaymentStatus.LUNAS &&
+      (order.pricePerKg === null || order.totalInvoice === null)
+    ) {
+      throw new BusinessRuleException(
+        'Order price is not locked yet for this delivery date',
+      );
+    }
+
     const amountPaidBigint =
       dto.amountPaid !== undefined ? BigInt(dto.amountPaid) : null;
 

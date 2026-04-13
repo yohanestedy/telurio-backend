@@ -4,8 +4,10 @@ import { PrismaService } from '../prisma';
 import {
   buildPaginationMeta,
   ConflictException,
+  getTodayDateOnlyUtc,
   NotFoundException,
   generateUuidV7,
+  parseDateOnlyUtc,
 } from '../common';
 import { CreateEggPriceDto, QueryEggPricesDto, UpdateEggPriceDto } from './dto';
 
@@ -18,23 +20,16 @@ export class EggPricesService {
   constructor(private prisma: PrismaService) {}
 
   async getCurrentPrice() {
-    const today = new Date();
-
-    const current =
-      (await this.prisma.eggPrice.findFirst({
-        where: {
-          deletedAt: null,
-          effectiveDate: { lte: today },
-        },
-        orderBy: { effectiveDate: 'desc' },
-      })) ??
-      (await this.prisma.eggPrice.findFirst({
-        where: { deletedAt: null },
-        orderBy: { effectiveDate: 'desc' },
-      }));
+    const today = getTodayDateOnlyUtc();
+    const current = await this.prisma.eggPrice.findFirst({
+      where: {
+        deletedAt: null,
+        effectiveDate: today,
+      },
+    });
 
     if (!current) {
-      throw new NotFoundException('No active egg price found');
+      throw new NotFoundException('No egg price found for today');
     }
 
     return this.attachUpdatedByName(current);
@@ -93,9 +88,11 @@ export class EggPricesService {
   }
 
   async createPrice(actor: AuthUser, dto: CreateEggPriceDto) {
+    const effectiveDate = parseDateOnlyUtc(dto.effectiveDate, 'effectiveDate');
+
     const existing = await this.prisma.eggPrice.findFirst({
       where: {
-        effectiveDate: new Date(dto.effectiveDate),
+        effectiveDate,
       },
       select: { id: true },
     });
@@ -107,7 +104,7 @@ export class EggPricesService {
     const created = await this.prisma.eggPrice.create({
       data: {
         id: generateUuidV7(),
-        effectiveDate: new Date(dto.effectiveDate),
+        effectiveDate,
         pricePerKg: BigInt(dto.pricePerKg),
         notes: dto.notes ?? null,
         createdById: actor.id,

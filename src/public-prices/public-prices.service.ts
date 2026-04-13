@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma';
-import { NotFoundException } from '../common';
+import { getTodayDateOnlyUtc, NotFoundException } from '../common';
 
 type Canvas2DContext = {
   fillStyle: string;
@@ -99,31 +99,20 @@ export class PublicPricesService {
   }
 
   private async findCurrentPrice() {
-    const today = new Date();
-
-    const current =
-      (await this.prisma.eggPrice.findFirst({
-        where: {
-          deletedAt: null,
-          effectiveDate: { lte: today },
-        },
-        orderBy: { effectiveDate: 'desc' },
-        select: {
-          effectiveDate: true,
-          pricePerKg: true,
-        },
-      })) ??
-      (await this.prisma.eggPrice.findFirst({
-        where: { deletedAt: null },
-        orderBy: { effectiveDate: 'desc' },
-        select: {
-          effectiveDate: true,
-          pricePerKg: true,
-        },
-      }));
+    const today = getTodayDateOnlyUtc();
+    const current = await this.prisma.eggPrice.findFirst({
+      where: {
+        deletedAt: null,
+        effectiveDate: today,
+      },
+      select: {
+        effectiveDate: true,
+        pricePerKg: true,
+      },
+    });
 
     if (!current) {
-      throw new NotFoundException('No active egg price found');
+      throw new NotFoundException('No egg price found for today');
     }
 
     return current;

@@ -13,7 +13,10 @@ import {
   buildPaginationMeta,
   ForbiddenException,
   NotFoundException,
+  getTodayDateKey,
   generateUuidV7,
+  parseDateOnlyUtc,
+  toDateKey,
 } from '../common';
 import {
   CancelOrderDto,
@@ -155,12 +158,13 @@ export class OrdersService {
     }
 
     const paymentStatus = dto.paymentStatus ?? PaymentStatus.BELUM_BAYAR;
-    const deliveryDate = this.parseDateOnlyUtc(dto.deliveryDate);
-    const todayDateKey = dayjs().format('YYYY-MM-DD');
+    const deliveryDate = parseDateOnlyUtc(dto.deliveryDate, 'deliveryDate');
+    const todayDateKey = getTodayDateKey();
+    const isTodayDelivery = toDateKey(deliveryDate) === todayDateKey;
 
     if (
       paymentStatus === PaymentStatus.LUNAS &&
-      this.toDateKey(deliveryDate) !== todayDateKey
+      !isTodayDelivery
     ) {
       throw new BusinessRuleException(
         'LUNAS is only allowed when delivery date is today',
@@ -178,11 +182,7 @@ export class OrdersService {
     let lockedPrice: bigint | null = null;
     let totalInvoice: bigint | null = null;
 
-    if (paymentStatus === PaymentStatus.LUNAS) {
-      if (!dto.paymentMethod) {
-        throw new BusinessRuleException('LUNAS requires paymentMethod');
-      }
-
+    if (isTodayDelivery) {
       const eggPrice = await this.prisma.eggPrice.findFirst({
         where: {
           effectiveDate: deliveryDate,
@@ -199,6 +199,10 @@ export class OrdersService {
 
       lockedPrice = eggPrice.pricePerKg;
       totalInvoice = this.computeInvoice(dto.quantityKg, lockedPrice);
+    }
+
+    if (paymentStatus === PaymentStatus.LUNAS && !dto.paymentMethod) {
+      throw new BusinessRuleException('LUNAS requires paymentMethod');
     }
 
     const created = await this.prisma.$transaction(async (tx) => {
@@ -268,7 +272,44 @@ export class OrdersService {
 
     let nextDeliveryDate = existing.deliveryDate;
     if (dto.deliveryDate) {
-      nextDeliveryDate = this.parseDateOnlyUtc(dto.deliveryDate);
+      nextDeliveryDate = parseDateOnlyUtc(dto.deliveryDate, 'deliveryDate');
+    }
+
+    const todayDateKey = getTodayDateKey();
+    const nextDateKey = toDateKey(nextDeliveryDate);
+    const nextQuantityKg = dto.quantityKg ?? Number(existing.quantityKg);
+    let nextPricePerKg: bigint | null = existing.pricePerKg;
+    let nextTotalInvoice: bigint | null = existing.totalInvoice;
+
+    if (
+      existing.paymentStatus === PaymentStatus.LUNAS &&
+      nextDateKey !== todayDateKey
+    ) {
+      throw new BusinessRuleException(
+        'LUNAS is only allowed when delivery date is today',
+      );
+    }
+
+    if (nextDateKey === todayDateKey) {
+      const eggPrice = await this.prisma.eggPrice.findFirst({
+        where: {
+          effectiveDate: nextDeliveryDate,
+          deletedAt: null,
+        },
+        select: { pricePerKg: true },
+      });
+
+      if (!eggPrice) {
+        throw new BusinessRuleException(
+          'Daily egg price for delivery date is not available',
+        );
+      }
+
+      nextPricePerKg = eggPrice.pricePerKg;
+      nextTotalInvoice = this.computeInvoice(nextQuantityKg, eggPrice.pricePerKg);
+    } else {
+      nextPricePerKg = null;
+      nextTotalInvoice = null;
     }
 
     const updated = await this.prisma.order.update({
@@ -280,14 +321,8 @@ export class OrdersService {
           ? { deliverBefore: dto.deliverBefore }
           : {}),
         ...(dto.notes !== undefined ? { notes: dto.notes } : {}),
-        ...(dto.quantityKg !== undefined && existing.pricePerKg
-          ? {
-              totalInvoice: this.computeInvoice(
-                dto.quantityKg,
-                existing.pricePerKg,
-              ),
-            }
-          : {}),
+        pricePerKg: nextPricePerKg,
+        totalInvoice: nextTotalInvoice,
         updatedById: user.id,
         updatedAt: new Date(),
       },
@@ -423,23 +458,5 @@ export class OrdersService {
     });
 
     return accesses.map((a) => a.coopId);
-  }
-
-  private parseDateOnlyUtc(value: string): Date {
-    const dateKey = value.slice(0, 10);
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(dateKey)) {
-      throw new BusinessRuleException('Invalid date format');
-    }
-
-    const parsed = new Date(`${dateKey}T00:00:00.000Z`);
-    if (Number.isNaN(parsed.getTime())) {
-      throw new BusinessRuleException('Invalid date value');
-    }
-
-    return parsed;
-  }
-
-  private toDateKey(value: Date): string {
-    return value.toISOString().slice(0, 10);
   }
 }
