@@ -155,14 +155,13 @@ export class OrdersService {
     }
 
     const paymentStatus = dto.paymentStatus ?? PaymentStatus.BELUM_BAYAR;
-    const deliveryDate = dayjs(dto.deliveryDate).startOf('day');
-    const today = dayjs().startOf('day');
+    const deliveryDate = this.parseDateOnlyUtc(dto.deliveryDate);
+    const todayDateKey = dayjs().format('YYYY-MM-DD');
 
-    if (!deliveryDate.isValid()) {
-      throw new BusinessRuleException('Invalid deliveryDate');
-    }
-
-    if (!deliveryDate.isSame(today) && paymentStatus === PaymentStatus.LUNAS) {
+    if (
+      paymentStatus === PaymentStatus.LUNAS &&
+      this.toDateKey(deliveryDate) !== todayDateKey
+    ) {
       throw new BusinessRuleException(
         'LUNAS is only allowed when delivery date is today',
       );
@@ -186,7 +185,7 @@ export class OrdersService {
 
       const eggPrice = await this.prisma.eggPrice.findFirst({
         where: {
-          effectiveDate: deliveryDate.toDate(),
+          effectiveDate: deliveryDate,
           deletedAt: null,
         },
         select: { pricePerKg: true },
@@ -210,7 +209,7 @@ export class OrdersService {
           quantityKg: dto.quantityKg,
           pricePerKg: lockedPrice,
           totalInvoice,
-          deliveryDate: deliveryDate.toDate(),
+          deliveryDate,
           deliverBefore: dto.deliverBefore ?? null,
           paymentStatus,
           paymentMethod: dto.paymentMethod ?? null,
@@ -269,7 +268,7 @@ export class OrdersService {
 
     let nextDeliveryDate = existing.deliveryDate;
     if (dto.deliveryDate) {
-      nextDeliveryDate = dayjs(dto.deliveryDate).startOf('day').toDate();
+      nextDeliveryDate = this.parseDateOnlyUtc(dto.deliveryDate);
     }
 
     const updated = await this.prisma.order.update({
@@ -424,5 +423,23 @@ export class OrdersService {
     });
 
     return accesses.map((a) => a.coopId);
+  }
+
+  private parseDateOnlyUtc(value: string): Date {
+    const dateKey = value.slice(0, 10);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(dateKey)) {
+      throw new BusinessRuleException('Invalid date format');
+    }
+
+    const parsed = new Date(`${dateKey}T00:00:00.000Z`);
+    if (Number.isNaN(parsed.getTime())) {
+      throw new BusinessRuleException('Invalid date value');
+    }
+
+    return parsed;
+  }
+
+  private toDateKey(value: Date): string {
+    return value.toISOString().slice(0, 10);
   }
 }
