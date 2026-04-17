@@ -2,11 +2,7 @@ import { IsDateString, IsIn, IsOptional, IsUUID } from 'class-validator';
 import { PaginationDto, sortOrders } from '../../common';
 import type { SortOrder } from '../../common';
 
-export const expenseSortFields = [
-  'date',
-  'createdAt',
-  'amount',
-] as const;
+export const expenseSortFields = ['date', 'createdAt', 'amount'] as const;
 export type ExpenseSortField = (typeof expenseSortFields)[number];
 
 export class QueryExpensesDto extends PaginationDto {

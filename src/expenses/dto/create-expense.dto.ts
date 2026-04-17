@@ -20,8 +20,6 @@ export class CreateExpenseDto {
   @IsUUID()
   expenseCategoryId?: string | null;
 
-
-
   @IsOptional()
   @IsString()
   @Length(1, 255)

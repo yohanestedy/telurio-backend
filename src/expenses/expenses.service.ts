@@ -199,8 +199,12 @@ export class ExpensesService {
       where: { id: expenseId },
       data: {
         ...(dto.date !== undefined ? { date: new Date(dto.date) } : {}),
-        ...(dto.expenseCategoryId !== undefined ? { expenseCategoryId: dto.expenseCategoryId } : {}),
-        ...(dto.description !== undefined ? { description: dto.description } : {}),
+        ...(dto.expenseCategoryId !== undefined
+          ? { expenseCategoryId: dto.expenseCategoryId }
+          : {}),
+        ...(dto.description !== undefined
+          ? { description: dto.description }
+          : {}),
         ...(dto.amount !== undefined ? { amount: BigInt(dto.amount) } : {}),
         ...(dto.notes !== undefined ? { notes: dto.notes } : {}),
         updatedById: user.id,
