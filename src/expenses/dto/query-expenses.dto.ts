@@ -6,7 +6,6 @@ export const expenseSortFields = [
   'date',
   'createdAt',
   'amount',
-  'categoryLabel',
 ] as const;
 export type ExpenseSortField = (typeof expenseSortFields)[number];
 

@@ -262,7 +262,6 @@ model Expense {
   date              DateTime         @db.Date
   coopId            String           @db.Uuid
   expenseCategoryId String?          @db.Uuid
-  categoryLabel     String
   description       String?
   amount            BigInt           @db.BigInt
   notes             String?

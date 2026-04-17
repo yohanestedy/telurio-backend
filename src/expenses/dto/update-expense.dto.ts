@@ -6,6 +6,7 @@ import {
   IsString,
   Length,
   Min,
+  IsUUID,
 } from 'class-validator';
 
 export class UpdateExpenseDto {
@@ -14,9 +15,8 @@ export class UpdateExpenseDto {
   date?: string;
 
   @IsOptional()
-  @IsString()
-  @Length(2, 120)
-  categoryLabel?: string;
+  @IsUUID()
+  expenseCategoryId?: string | null;
 
   @IsOptional()
   @IsString()

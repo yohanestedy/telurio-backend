@@ -30,7 +30,7 @@ export class ExpensesService {
       date: { date: query.order },
       createdAt: { createdAt: query.order },
       amount: { amount: query.order },
-      categoryLabel: { categoryLabel: query.order },
+      // categoryLabel: { categoryLabel: query.order },
     };
 
     const ownerCoopIds = await this.getOwnerCoopIds(user);
@@ -76,6 +76,7 @@ export class ExpensesService {
         orderBy,
         include: {
           coop: { select: { name: true } },
+          expenseCategory: { select: { name: true } },
         },
       }),
     ]);
@@ -93,8 +94,8 @@ export class ExpensesService {
         date: item.date,
         coopId: item.coopId,
         coopName: item.coop.name,
-        categoryLabel: item.categoryLabel,
         expenseCategoryId: item.expenseCategoryId,
+        expenseCategoryName: item.expenseCategory?.name ?? null,
         description: item.description,
         amount: item.amount,
         notes: item.notes,
@@ -134,7 +135,7 @@ export class ExpensesService {
         date: new Date(dto.date),
         coopId: dto.coopId,
         expenseCategoryId: dto.expenseCategoryId ?? null,
-        categoryLabel: dto.categoryLabel,
+        // categoryLabel removed
         description: dto.description ?? null,
         amount: BigInt(dto.amount),
         notes: dto.notes ?? null,
@@ -150,7 +151,7 @@ export class ExpensesService {
       date: created.date,
       coopId: created.coopId,
       coopName: created.coop.name,
-      categoryLabel: created.categoryLabel,
+      // categoryLabel removed
       expenseCategoryId: created.expenseCategoryId,
       description: created.description,
       amount: created.amount,
@@ -198,12 +199,8 @@ export class ExpensesService {
       where: { id: expenseId },
       data: {
         ...(dto.date !== undefined ? { date: new Date(dto.date) } : {}),
-        ...(dto.categoryLabel !== undefined
-          ? { categoryLabel: dto.categoryLabel }
-          : {}),
-        ...(dto.description !== undefined
-          ? { description: dto.description }
-          : {}),
+        ...(dto.expenseCategoryId !== undefined ? { expenseCategoryId: dto.expenseCategoryId } : {}),
+        ...(dto.description !== undefined ? { description: dto.description } : {}),
         ...(dto.amount !== undefined ? { amount: BigInt(dto.amount) } : {}),
         ...(dto.notes !== undefined ? { notes: dto.notes } : {}),
         updatedById: user.id,
@@ -211,6 +208,7 @@ export class ExpensesService {
       },
       include: {
         coop: { select: { name: true } },
+        expenseCategory: { select: { name: true } },
       },
     });
 
@@ -219,8 +217,8 @@ export class ExpensesService {
       date: updated.date,
       coopId: updated.coopId,
       coopName: updated.coop.name,
-      categoryLabel: updated.categoryLabel,
       expenseCategoryId: updated.expenseCategoryId,
+      expenseCategoryName: updated.expenseCategory?.name ?? null,
       description: updated.description,
       amount: updated.amount,
       notes: updated.notes,
