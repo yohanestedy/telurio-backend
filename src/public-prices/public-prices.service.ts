@@ -24,6 +24,12 @@ type Canvas2DContext = {
   closePath: () => void;
   fill: () => void;
   stroke: () => void;
+  getImageData: (
+    x: number,
+    y: number,
+    width: number,
+    height: number,
+  ) => { data: Uint8ClampedArray };
 };
 
 type CanvasInstance = {
@@ -126,6 +132,11 @@ export class PublicPricesService {
       const height = 1080;
       const canvas = canvasFactory.createCanvas(width, height);
       const context = canvas.getContext('2d');
+
+      // Some serverless runtimes render shapes but fail to render glyphs.
+      if (!this.canRenderCanvasText(canvasFactory, fontStack)) {
+        throw new Error('Canvas text rendering is unavailable in this runtime');
+      }
 
       context.fillStyle = '#fffaf5';
       context.fillRect(0, 0, width, height);
@@ -294,6 +305,40 @@ export class PublicPricesService {
       context.strokeStyle = strokeColor;
       context.lineWidth = 1;
       context.stroke();
+    }
+  }
+
+  private canRenderCanvasText(
+    canvasFactory: CanvasFactory,
+    fontStack: string,
+  ): boolean {
+    try {
+      const testCanvas = canvasFactory.createCanvas(320, 120);
+      const testContext = testCanvas.getContext('2d');
+
+      testContext.fillStyle = '#ffffff';
+      testContext.fillRect(0, 0, 320, 120);
+
+      testContext.fillStyle = '#111827';
+      testContext.font = `700 32px ${fontStack}`;
+      testContext.textAlign = 'left';
+      testContext.fillText('Telurio', 16, 74);
+
+      const pixels = testContext.getImageData(0, 0, 320, 120).data;
+      for (let index = 0; index < pixels.length; index += 4) {
+        const red = pixels[index];
+        const green = pixels[index + 1];
+        const blue = pixels[index + 2];
+        const alpha = pixels[index + 3];
+
+        if (alpha > 0 && (red < 245 || green < 245 || blue < 245)) {
+          return true;
+        }
+      }
+
+      return false;
+    } catch {
+      return false;
     }
   }
 
