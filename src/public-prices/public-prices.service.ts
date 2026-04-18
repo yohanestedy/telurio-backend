@@ -101,9 +101,10 @@ export class PublicPricesService {
       context.fillRect(80, 80, width - 160, height - 160);
 
       context.fillStyle = '#111827';
-      context.font = 'bold 64px Sans';
+      context.font = 'bold 54px Sans';
       context.textAlign = 'center';
-      context.fillText('Harga Telur Hari Ini', width / 2, 280);
+      context.fillText('Referensi Harga Telur', width / 2, 250);
+      context.fillText('Ras Lampung', width / 2, 320);
 
       const formattedPrice = new Intl.NumberFormat('id-ID').format(
         Number(current.pricePerKg),
@@ -125,8 +126,8 @@ export class PublicPricesService {
       context.fillText(formattedDate, width / 2, 650);
 
       context.fillStyle = '#6B7280';
-      context.font = 'bold 40px Sans';
-      context.fillText('Telurio Egg Farm Management', width / 2, 820);
+      context.font = 'bold 34px Sans';
+      context.fillText('Acuan harga pasar masyarakat Lampung', width / 2, 800);
 
       return {
         buffer: canvas.toBuffer('image/png'),
@@ -150,10 +151,11 @@ export class PublicPricesService {
 <svg xmlns="http://www.w3.org/2000/svg" width="1080" height="1080" viewBox="0 0 1080 1080">
   <rect width="1080" height="1080" fill="#ffffff"/>
   <rect x="80" y="80" width="920" height="920" rx="16" fill="#f3f4f6"/>
-  <text x="540" y="280" text-anchor="middle" font-family="Arial, sans-serif" font-size="64" font-weight="700" fill="#111827">Harga Telur Hari Ini</text>
+  <text x="540" y="250" text-anchor="middle" font-family="Arial, sans-serif" font-size="54" font-weight="700" fill="#111827">Referensi Harga Telur</text>
+  <text x="540" y="320" text-anchor="middle" font-family="Arial, sans-serif" font-size="54" font-weight="700" fill="#111827">Ras Lampung</text>
   <text x="540" y="520" text-anchor="middle" font-family="Arial, sans-serif" font-size="96" font-weight="700" fill="#047857">Rp ${formattedPrice}/kg</text>
   <text x="540" y="650" text-anchor="middle" font-family="Arial, sans-serif" font-size="42" fill="#374151">${safeDate}</text>
-  <text x="540" y="820" text-anchor="middle" font-family="Arial, sans-serif" font-size="40" font-weight="700" fill="#6b7280">Telurio Egg Farm Management</text>
+  <text x="540" y="800" text-anchor="middle" font-family="Arial, sans-serif" font-size="34" font-weight="700" fill="#6b7280">Acuan harga pasar masyarakat Lampung</text>
 </svg>`;
 
       return {
