@@ -16,10 +16,7 @@ import {
   parseDateOnlyUtc,
 } from '../common';
 import { PrismaService } from '../prisma';
-import {
-  CreateManualStockAdjustmentDto,
-  QueryStockMovementsDto,
-} from './dto';
+import { CreateManualStockAdjustmentDto, QueryStockMovementsDto } from './dto';
 
 interface AuthUser {
   id: string;
