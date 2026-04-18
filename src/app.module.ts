@@ -18,6 +18,7 @@ import { ReportsModule } from './reports';
 import { CalendarModule } from './calendar';
 import { AuditLogsModule } from './audit-logs';
 import { PublicPricesModule } from './public-prices';
+import { StocksModule } from './stocks';
 import { AllExceptionsFilter } from './common/filters';
 import {
   BigIntSerializerInterceptor,
@@ -44,6 +45,7 @@ import {
     CalendarModule,
     AuditLogsModule,
     PublicPricesModule,
+    StocksModule,
   ],
   providers: [
     { provide: APP_FILTER, useClass: AllExceptionsFilter },

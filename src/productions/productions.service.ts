@@ -1,11 +1,13 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma, Role } from '@prisma/client';
 import { PrismaService } from '../prisma';
+import { StocksService } from '../stocks';
 import {
   ConflictException,
   ForbiddenException,
   NotFoundException,
   buildPaginationMeta,
+  getTodayDateOnlyUtc,
   generateUuidV7,
 } from '../common';
 import {
@@ -22,7 +24,10 @@ interface AuthUser {
 
 @Injectable()
 export class ProductionsService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private stocksService: StocksService,
+  ) {}
 
   async listProductions(user: AuthUser, query: QueryProductionsDto) {
     const orderByMap: Record<
@@ -160,21 +165,33 @@ export class ProductionsService {
       );
     }
 
-    const created = await this.prisma.productionRecord.create({
-      data: {
-        id: generateUuidV7(),
-        date: new Date(dto.date),
-        coopId: dto.coopId,
-        collectionTime: dto.collectionTime,
-        goodKg: dto.goodKg,
-        goodCount: dto.goodCount,
-        brokenCount: dto.brokenCount ?? null,
-        notes: dto.notes ?? null,
+    const created = await this.prisma.$transaction(async (tx) => {
+      const createdRecord = await tx.productionRecord.create({
+        data: {
+          id: generateUuidV7(),
+          date: new Date(dto.date),
+          coopId: dto.coopId,
+          collectionTime: dto.collectionTime,
+          goodKg: dto.goodKg,
+          goodCount: dto.goodCount,
+          brokenCount: dto.brokenCount ?? null,
+          notes: dto.notes ?? null,
+          createdById: user.id,
+        },
+        include: {
+          coop: { select: { name: true } },
+        },
+      });
+
+      await this.stocksService.addProductionStock(tx, {
+        coopId: createdRecord.coopId,
+        movementDate: getTodayDateOnlyUtc(),
+        quantityKg: Number(createdRecord.goodKg),
+        sourceId: createdRecord.id,
         createdById: user.id,
-      },
-      include: {
-        coop: { select: { name: true } },
-      },
+      });
+
+      return createdRecord;
     });
 
     return {
@@ -195,28 +212,41 @@ export class ProductionsService {
   async updateProduction(id: string, user: AuthUser, dto: UpdateProductionDto) {
     const existing = await this.prisma.productionRecord.findFirst({
       where: { id, deletedAt: null },
-      select: { id: true },
+      select: { id: true, coopId: true, goodKg: true },
     });
 
     if (!existing) {
       throw new NotFoundException('Production record not found');
     }
 
-    const updated = await this.prisma.productionRecord.update({
-      where: { id },
-      data: {
-        ...(dto.goodKg !== undefined ? { goodKg: dto.goodKg } : {}),
-        ...(dto.goodCount !== undefined ? { goodCount: dto.goodCount } : {}),
-        ...(dto.brokenCount !== undefined
-          ? { brokenCount: dto.brokenCount }
-          : {}),
-        ...(dto.notes !== undefined ? { notes: dto.notes } : {}),
-        updatedById: user.id,
-        updatedAt: new Date(),
-      },
-      include: {
-        coop: { select: { name: true } },
-      },
+    const updated = await this.prisma.$transaction(async (tx) => {
+      const updatedRecord = await tx.productionRecord.update({
+        where: { id },
+        data: {
+          ...(dto.goodKg !== undefined ? { goodKg: dto.goodKg } : {}),
+          ...(dto.goodCount !== undefined ? { goodCount: dto.goodCount } : {}),
+          ...(dto.brokenCount !== undefined
+            ? { brokenCount: dto.brokenCount }
+            : {}),
+          ...(dto.notes !== undefined ? { notes: dto.notes } : {}),
+          updatedById: user.id,
+          updatedAt: new Date(),
+        },
+        include: {
+          coop: { select: { name: true } },
+        },
+      });
+
+      await this.stocksService.reconcileProductionStock(tx, {
+        coopId: existing.coopId,
+        movementDate: getTodayDateOnlyUtc(),
+        previousKg: Number(existing.goodKg),
+        nextKg: Number(updatedRecord.goodKg),
+        sourceId: existing.id,
+        createdById: user.id,
+      });
+
+      return updatedRecord;
     });
 
     return {
@@ -236,22 +266,32 @@ export class ProductionsService {
   async deleteProduction(id: string, user: AuthUser, dto: DeleteProductionDto) {
     const existing = await this.prisma.productionRecord.findFirst({
       where: { id, deletedAt: null },
-      select: { id: true },
+      select: { id: true, coopId: true, goodKg: true },
     });
 
     if (!existing) {
       throw new NotFoundException('Production record not found');
     }
 
-    await this.prisma.productionRecord.update({
-      where: { id },
-      data: {
-        deletedAt: new Date(),
-        deletedById: user.id,
-        deleteReason: dto.deleteReason,
-        updatedById: user.id,
-        updatedAt: new Date(),
-      },
+    await this.prisma.$transaction(async (tx) => {
+      await this.stocksService.removeProductionStock(tx, {
+        coopId: existing.coopId,
+        movementDate: getTodayDateOnlyUtc(),
+        quantityKg: Number(existing.goodKg),
+        sourceId: existing.id,
+        createdById: user.id,
+      });
+
+      await tx.productionRecord.update({
+        where: { id },
+        data: {
+          deletedAt: new Date(),
+          deletedById: user.id,
+          deleteReason: dto.deleteReason,
+          updatedById: user.id,
+          updatedAt: new Date(),
+        },
+      });
     });
 
     return { message: 'Record deleted successfully' };

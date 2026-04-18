@@ -5,9 +5,11 @@ import {
   BusinessRuleException,
   ForbiddenException,
   NotFoundException,
+  getTodayDateOnlyUtc,
   generateUuidV7,
 } from '../common';
 import { OrdersService } from '../orders';
+import { StocksService } from '../stocks';
 import { StartDeliveryDto, UpdateAllocationsDto } from './dto';
 
 interface AuthUser {
@@ -20,6 +22,7 @@ export class DeliveriesService {
   constructor(
     private prisma: PrismaService,
     private ordersService: OrdersService,
+    private stocksService: StocksService,
   ) {}
 
   async getAllocations(orderId: string, user: AuthUser) {
@@ -94,10 +97,28 @@ export class DeliveriesService {
       eggPrice.pricePerKg,
     );
 
+    const movementDate = getTodayDateOnlyUtc();
+    const allocationsWithId = dto.allocations.map((item) => ({
+      id: generateUuidV7(),
+      coopId: item.coopId,
+      quantityKg: item.quantityKg,
+    }));
+
     await this.prisma.$transaction(async (tx) => {
+      await this.stocksService.reserveForOrderAllocations(tx, {
+        orderId,
+        movementDate,
+        createdById: user.id,
+        allocations: allocationsWithId.map((item) => ({
+          sourceId: item.id,
+          coopId: item.coopId,
+          quantityKg: item.quantityKg,
+        })),
+      });
+
       await tx.orderSourceAllocation.createMany({
-        data: dto.allocations.map((item) => ({
-          id: generateUuidV7(),
+        data: allocationsWithId.map((item) => ({
+          id: item.id,
           orderId,
           coopId: item.coopId,
           quantityKg: item.quantityKg,
@@ -165,6 +186,12 @@ export class DeliveriesService {
       );
     }
 
+    if (order.deliveryStatus !== DeliveryStatus.SEDANG_DIHANTAR) {
+      throw new BusinessRuleException(
+        'Allocation update is only allowed while delivery is in progress',
+      );
+    }
+
     this.validateAllocationTotal(Number(order.quantityKg), dto.allocations);
 
     const coopIds = dto.allocations.map((item) => item.coopId);
@@ -177,11 +204,32 @@ export class DeliveriesService {
       throw new NotFoundException('One or more coop ids are not found');
     }
 
+    const existingAllocations =
+      await this.prisma.orderSourceAllocation.findMany({
+        where: { orderId },
+        select: { id: true, coopId: true, quantityKg: true },
+      });
+
+    const movementDate = getTodayDateOnlyUtc();
+    const nextAllocations = dto.allocations.map((item) => ({
+      id: generateUuidV7(),
+      coopId: item.coopId,
+      quantityKg: item.quantityKg,
+    }));
+
     await this.prisma.$transaction(async (tx) => {
+      await this.stocksService.reconcileOrderAllocations(tx, {
+        orderId,
+        movementDate,
+        createdById: user.id,
+        previousAllocations: existingAllocations,
+        nextAllocations,
+      });
+
       await tx.orderSourceAllocation.deleteMany({ where: { orderId } });
       await tx.orderSourceAllocation.createMany({
-        data: dto.allocations.map((item) => ({
-          id: generateUuidV7(),
+        data: nextAllocations.map((item) => ({
+          id: item.id,
           orderId,
           coopId: item.coopId,
           quantityKg: item.quantityKg,
