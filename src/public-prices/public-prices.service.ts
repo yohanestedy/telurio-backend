@@ -468,7 +468,7 @@ export class PublicPricesService {
   }
 
   private getFontStack() {
-    return '"Plus Jakarta Sans", "Segoe UI", "Helvetica Neue", Arial, sans-serif';
+    return 'system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif';
   }
 
   private capitalizeFirst(value: string): string {
