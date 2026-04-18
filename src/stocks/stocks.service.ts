@@ -7,11 +7,15 @@ import {
   StockMovementType,
 } from '@prisma/client';
 import {
+  buildPaginationMeta,
   BusinessRuleException,
   generateUuidV7,
   getTodayDateOnlyUtc,
+  type PaginationMeta,
+  parseDateOnlyUtc,
 } from '../common';
 import { PrismaService } from '../prisma';
+import { QueryStockMovementsDto } from './dto';
 
 interface AuthUser {
   id: string;
@@ -35,6 +39,27 @@ export interface LiveStockResponse {
   coops: LiveStockCoopItem[];
 }
 
+export interface StockMovementListItem {
+  id: string;
+  coopId: string;
+  coopName: string;
+  movementDate: Date;
+  movementType: StockMovementType;
+  direction: StockMovementDirection;
+  sourceType: StockMovementSource;
+  sourceId: string;
+  orderId: string | null;
+  quantityKg: string;
+  notes: string | null;
+  createdAt: Date;
+  createdByName: string | null;
+}
+
+export interface StockMovementListResponse {
+  data: StockMovementListItem[];
+  meta: PaginationMeta;
+}
+
 interface StockAllocationInput {
   sourceId: string;
   coopId: string;
@@ -44,6 +69,148 @@ interface StockAllocationInput {
 @Injectable()
 export class StocksService {
   constructor(private prisma: PrismaService) {}
+
+  async listMovements(
+    user: AuthUser,
+    query: QueryStockMovementsDto,
+  ): Promise<StockMovementListResponse> {
+    const allowedCoopIds = await this.getAllowedCoopIds(user);
+
+    if (!allowedCoopIds.length) {
+      return {
+        data: [] as StockMovementListItem[],
+        meta: buildPaginationMeta({
+          page: query.page,
+          limit: query.limit,
+          total: 0,
+          sortBy: query.sortBy,
+          order: query.order,
+          all: query.all,
+          filters: {
+            all: query.all,
+            coopId: query.coopId,
+            movementType: query.movementType,
+            direction: query.direction,
+            startDate: query.startDate,
+            endDate: query.endDate,
+          },
+        }),
+      };
+    }
+
+    if (query.coopId && !allowedCoopIds.includes(query.coopId)) {
+      return {
+        data: [] as StockMovementListItem[],
+        meta: buildPaginationMeta({
+          page: query.page,
+          limit: query.limit,
+          total: 0,
+          sortBy: query.sortBy,
+          order: query.order,
+          all: query.all,
+          filters: {
+            all: query.all,
+            coopId: query.coopId,
+            movementType: query.movementType,
+            direction: query.direction,
+            startDate: query.startDate,
+            endDate: query.endDate,
+          },
+        }),
+      };
+    }
+
+    const scopedCoopIds = query.coopId ? [query.coopId] : allowedCoopIds;
+
+    const where: Prisma.StockMovementWhereInput = {
+      coopId: { in: scopedCoopIds },
+      ...(query.movementType ? { movementType: query.movementType } : {}),
+      ...(query.direction ? { direction: query.direction } : {}),
+      ...(query.startDate || query.endDate
+        ? {
+            movementDate: {
+              ...(query.startDate
+                ? { gte: parseDateOnlyUtc(query.startDate, 'startDate') }
+                : {}),
+              ...(query.endDate
+                ? { lte: parseDateOnlyUtc(query.endDate, 'endDate') }
+                : {}),
+            },
+          }
+        : {}),
+    };
+
+    const orderByMap: Record<
+      QueryStockMovementsDto['sortBy'],
+      Prisma.StockMovementOrderByWithRelationInput
+    > = {
+      movementDate: { movementDate: query.order },
+      createdAt: { createdAt: query.order },
+      quantityKg: { quantityKg: query.order },
+      movementType: { movementType: query.order },
+    };
+
+    const orderBy: Prisma.StockMovementOrderByWithRelationInput[] =
+      query.sortBy === 'createdAt'
+        ? [orderByMap[query.sortBy]]
+        : [orderByMap[query.sortBy], { createdAt: 'desc' }];
+
+    const [total, rows] = await this.prisma.$transaction([
+      this.prisma.stockMovement.count({ where }),
+      this.prisma.stockMovement.findMany({
+        where,
+        skip: query.offset,
+        take: query.take,
+        orderBy,
+        include: {
+          coop: { select: { name: true } },
+        },
+      }),
+    ]);
+
+    const creatorIds = [...new Set(rows.map((row) => row.createdById))];
+    const creators = creatorIds.length
+      ? await this.prisma.user.findMany({
+          where: { id: { in: creatorIds } },
+          select: { id: true, name: true },
+        })
+      : [];
+    const creatorMap = new Map(creators.map((item) => [item.id, item.name]));
+
+    return {
+      data: rows.map((row) => ({
+        id: row.id,
+        coopId: row.coopId,
+        coopName: row.coop.name,
+        movementDate: row.movementDate,
+        movementType: row.movementType,
+        direction: row.direction,
+        sourceType: row.sourceType,
+        sourceId: row.sourceId,
+        orderId: row.orderId,
+        quantityKg: row.quantityKg.toString(),
+        notes: row.notes,
+        createdAt: row.createdAt,
+        createdByName: creatorMap.get(row.createdById) ?? null,
+      })),
+      meta: buildPaginationMeta({
+        page: query.page,
+        limit: query.limit,
+        total,
+        sortBy: query.sortBy,
+        order: query.order,
+        all: query.all,
+        filters: {
+          all: query.all,
+          coopId: query.coopId,
+          movementType: query.movementType,
+          direction: query.direction,
+          startDate: query.startDate,
+          endDate: query.endDate,
+        },
+      }),
+    };
+  }
 
   async getLiveStock(user: AuthUser): Promise<LiveStockResponse> {
     const allowedCoopIds = await this.getAllowedCoopIds(user);
