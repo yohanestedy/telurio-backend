@@ -1,8 +1,12 @@
-import { Controller, Get, Query } from '@nestjs/common';
+import { Body, Controller, Get, Post, Query } from '@nestjs/common';
 import { Role } from '@prisma/client';
 import { CurrentUser, Roles } from '../common';
-import { QueryStockMovementsDto } from './dto';
-import { StockMovementListResponse, StocksService } from './stocks.service';
+import { CreateManualStockAdjustmentDto, QueryStockMovementsDto } from './dto';
+import {
+  ManualStockAdjustmentResponse,
+  StockMovementListResponse,
+  StocksService,
+} from './stocks.service';
 
 @Controller('stocks')
 export class StocksController {
@@ -22,5 +26,15 @@ export class StocksController {
   ): Promise<StockMovementListResponse> {
     // eslint-disable-next-line @typescript-eslint/no-unsafe-call
     return await this.stocksService.listMovements(user, query);
+  }
+
+  @Post('manual-adjustments')
+  @Roles(Role.ADMIN)
+  async createManualAdjustment(
+    @CurrentUser() user: { id: string; role: Role },
+    @Body() dto: CreateManualStockAdjustmentDto,
+  ): Promise<ManualStockAdjustmentResponse> {
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-call
+    return await this.stocksService.createManualAdjustment(user, dto);
   }
 }

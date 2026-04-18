@@ -11,11 +11,15 @@ import {
   BusinessRuleException,
   generateUuidV7,
   getTodayDateOnlyUtc,
+  NotFoundException,
   type PaginationMeta,
   parseDateOnlyUtc,
 } from '../common';
 import { PrismaService } from '../prisma';
-import { QueryStockMovementsDto } from './dto';
+import {
+  CreateManualStockAdjustmentDto,
+  QueryStockMovementsDto,
+} from './dto';
 
 interface AuthUser {
   id: string;
@@ -60,6 +64,19 @@ export interface StockMovementListResponse {
   meta: PaginationMeta;
 }
 
+export interface ManualStockAdjustmentResponse {
+  id: string;
+  coopId: string;
+  coopName: string;
+  direction: StockMovementDirection;
+  movementType: StockMovementType;
+  quantityKg: string;
+  notes: string | null;
+  movementDate: Date;
+  createdAt: Date;
+  availableKg: string;
+}
+
 interface StockAllocationInput {
   sourceId: string;
   coopId: string;
@@ -69,6 +86,90 @@ interface StockAllocationInput {
 @Injectable()
 export class StocksService {
   constructor(private prisma: PrismaService) {}
+
+  async createManualAdjustment(
+    user: AuthUser,
+    dto: CreateManualStockAdjustmentDto,
+  ): Promise<ManualStockAdjustmentResponse> {
+    const coop = await this.prisma.coop.findFirst({
+      where: {
+        id: dto.coopId,
+        deletedAt: null,
+      },
+      select: {
+        id: true,
+        name: true,
+      },
+    });
+
+    if (!coop) {
+      throw new NotFoundException('Coop not found');
+    }
+
+    const movementDate = getTodayDateOnlyUtc();
+    const quantityKg = this.normalizeKg(dto.quantityKg);
+    const direction = dto.direction as StockMovementDirection;
+    const movementType =
+      direction === StockMovementDirection.IN
+        ? StockMovementType.MANUAL_ADJUST_IN
+        : StockMovementType.MANUAL_ADJUST_OUT;
+    const sourceId = generateUuidV7();
+
+    const movement = await this.prisma.$transaction(async (tx) => {
+      if (direction === StockMovementDirection.IN) {
+        await tx.coopStockBalance.upsert({
+          where: { coopId: dto.coopId },
+          create: {
+            coopId: dto.coopId,
+            availableKg: quantityKg,
+          },
+          update: {
+            availableKg: { increment: quantityKg },
+          },
+        });
+      } else {
+        await this.consumeStock(
+          tx,
+          dto.coopId,
+          quantityKg,
+          'Stok kandang tidak cukup untuk penyesuaian manual keluar',
+        );
+      }
+
+      return await tx.stockMovement.create({
+        data: {
+          id: generateUuidV7(),
+          coopId: dto.coopId,
+          movementDate,
+          movementType,
+          direction,
+          sourceType: StockMovementSource.MANUAL_ADJUSTMENT,
+          sourceId,
+          quantityKg,
+          createdById: user.id,
+          notes: dto.notes ?? null,
+        },
+      });
+    });
+
+    const latestBalance = await this.prisma.coopStockBalance.findUnique({
+      where: { coopId: dto.coopId },
+      select: { availableKg: true },
+    });
+
+    return {
+      id: movement.id,
+      coopId: dto.coopId,
+      coopName: coop.name,
+      direction,
+      movementType,
+      quantityKg: movement.quantityKg.toString(),
+      notes: movement.notes,
+      movementDate: movement.movementDate,
+      createdAt: movement.createdAt,
+      availableKg: this.formatKg(this.toKg(latestBalance?.availableKg)),
+    };
+  }
 
   async listMovements(
     user: AuthUser,
