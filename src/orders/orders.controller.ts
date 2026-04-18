@@ -30,6 +30,14 @@ export class OrdersController {
     return await this.ordersService.listOrders(user, query);
   }
 
+  @Get(':id')
+  async detail(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() user: { id: string; role: Role },
+  ) {
+    return await this.ordersService.getOrderDetail(id, user);
+  }
+
   @Post()
   @Roles(Role.ADMIN)
   async create(

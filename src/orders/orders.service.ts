@@ -34,6 +34,11 @@ interface AuthUser {
 export class OrdersService {
   constructor(private prisma: PrismaService) {}
 
+  async getOrderDetail(id: string, user: AuthUser) {
+    await this.ensureOrderAccess(id, user);
+    return this.getOrderById(id);
+  }
+
   async listOrders(user: AuthUser, query: QueryOrdersDto) {
     const allowedCoopIds = await this.getAllowedCoopIds(user);
 
@@ -162,10 +167,7 @@ export class OrdersService {
     const todayDateKey = getTodayDateKey();
     const isTodayDelivery = toDateKey(deliveryDate) === todayDateKey;
 
-    if (
-      paymentStatus === PaymentStatus.LUNAS &&
-      !isTodayDelivery
-    ) {
+    if (paymentStatus === PaymentStatus.LUNAS && !isTodayDelivery) {
       throw new BusinessRuleException(
         'LUNAS is only allowed when delivery date is today',
       );
@@ -306,7 +308,10 @@ export class OrdersService {
       }
 
       nextPricePerKg = eggPrice.pricePerKg;
-      nextTotalInvoice = this.computeInvoice(nextQuantityKg, eggPrice.pricePerKg);
+      nextTotalInvoice = this.computeInvoice(
+        nextQuantityKg,
+        eggPrice.pricePerKg,
+      );
     } else {
       nextPricePerKg = null;
       nextTotalInvoice = null;
