@@ -20,13 +20,13 @@ export class PublicPricesController {
 
   @Get('share-image')
   async shareImage(@Res() response: Response) {
-    const imageBuffer = await this.service.generateShareImage();
+    const shareImage = await this.service.generateShareImage();
 
-    response.setHeader('Content-Type', 'image/png');
+    response.setHeader('Content-Type', shareImage.contentType);
     response.setHeader(
       'Content-Disposition',
-      'inline; filename="egg-price.png"',
+      `inline; filename="${shareImage.filename}"`,
     );
-    response.send(imageBuffer);
+    response.send(shareImage.buffer);
   }
 }
