@@ -24,6 +24,12 @@ export class CreateOrderDto {
   deliveryDate: string;
 
   @IsOptional()
+  @Type(() => Number)
+  @IsNumber({ maxDecimalPlaces: 0 })
+  @Min(0)
+  customPricePerKg?: number;
+
+  @IsOptional()
   @IsString()
   @Length(1, 10)
   deliverBefore?: string;

@@ -167,6 +167,12 @@ export class OrdersService {
     const todayDateKey = getTodayDateKey();
     const isTodayDelivery = toDateKey(deliveryDate) === todayDateKey;
 
+    if (!isTodayDelivery && dto.customPricePerKg !== undefined) {
+      throw new BusinessRuleException(
+        'Custom pricePerKg is only allowed when delivery date is today',
+      );
+    }
+
     if (paymentStatus === PaymentStatus.LUNAS && !isTodayDelivery) {
       throw new BusinessRuleException(
         'LUNAS is only allowed when delivery date is today',
@@ -199,8 +205,15 @@ export class OrdersService {
         );
       }
 
-      lockedPrice = eggPrice.pricePerKg;
-      totalInvoice = this.computeInvoice(dto.quantityKg, lockedPrice);
+      const customPricePerKg =
+        dto.customPricePerKg !== undefined
+          ? BigInt(String(dto.customPricePerKg))
+          : null;
+
+      const selectedPricePerKg = customPricePerKg ?? eggPrice.pricePerKg;
+
+      lockedPrice = selectedPricePerKg;
+      totalInvoice = this.computeInvoice(dto.quantityKg, selectedPricePerKg);
     }
 
     if (paymentStatus === PaymentStatus.LUNAS && !dto.paymentMethod) {
@@ -278,6 +291,7 @@ export class OrdersService {
     }
 
     const todayDateKey = getTodayDateKey();
+    const existingDateKey = toDateKey(existing.deliveryDate);
     const nextDateKey = toDateKey(nextDeliveryDate);
     const nextQuantityKg = dto.quantityKg ?? Number(existing.quantityKg);
     let nextPricePerKg: bigint | null = existing.pricePerKg;
@@ -293,25 +307,38 @@ export class OrdersService {
     }
 
     if (nextDateKey === todayDateKey) {
-      const eggPrice = await this.prisma.eggPrice.findFirst({
-        where: {
-          effectiveDate: nextDeliveryDate,
-          deletedAt: null,
-        },
-        select: { pricePerKg: true },
-      });
+      const shouldKeepCurrentLockedPrice =
+        existing.pricePerKg !== null && existingDateKey === todayDateKey;
 
-      if (!eggPrice) {
-        throw new BusinessRuleException(
-          'Daily egg price for delivery date is not available',
+      const currentLockedPrice = existing.pricePerKg;
+
+      if (shouldKeepCurrentLockedPrice && currentLockedPrice !== null) {
+        nextPricePerKg = currentLockedPrice;
+        nextTotalInvoice = this.computeInvoice(
+          nextQuantityKg,
+          currentLockedPrice,
+        );
+      } else {
+        const eggPrice = await this.prisma.eggPrice.findFirst({
+          where: {
+            effectiveDate: nextDeliveryDate,
+            deletedAt: null,
+          },
+          select: { pricePerKg: true },
+        });
+
+        if (!eggPrice) {
+          throw new BusinessRuleException(
+            'Daily egg price for delivery date is not available',
+          );
+        }
+
+        nextPricePerKg = eggPrice.pricePerKg;
+        nextTotalInvoice = this.computeInvoice(
+          nextQuantityKg,
+          eggPrice.pricePerKg,
         );
       }
-
-      nextPricePerKg = eggPrice.pricePerKg;
-      nextTotalInvoice = this.computeInvoice(
-        nextQuantityKg,
-        eggPrice.pricePerKg,
-      );
     } else {
       nextPricePerKg = null;
       nextTotalInvoice = null;

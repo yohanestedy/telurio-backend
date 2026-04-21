@@ -5,7 +5,9 @@ import {
   BusinessRuleException,
   ForbiddenException,
   NotFoundException,
+  getTodayDateKey,
   getTodayDateOnlyUtc,
+  toDateKey,
   generateUuidV7,
 } from '../common';
 import { OrdersService } from '../orders';
@@ -78,23 +80,45 @@ export class DeliveriesService {
     );
     this.validateAllocationTotal(Number(order.quantityKg), dto.allocations);
 
-    const eggPrice = await this.prisma.eggPrice.findFirst({
-      where: {
-        effectiveDate: order.deliveryDate,
-        deletedAt: null,
-      },
-      select: { pricePerKg: true },
-    });
+    if (order.pricePerKg !== null && dto.customPricePerKg !== undefined) {
+      throw new BusinessRuleException('Order price is already locked');
+    }
 
-    if (!eggPrice) {
-      throw new BusinessRuleException(
-        'Daily egg price for delivery date is not available',
-      );
+    let lockedPricePerKg = order.pricePerKg;
+
+    if (lockedPricePerKg === null) {
+      const isTodayDelivery =
+        toDateKey(order.deliveryDate) === getTodayDateKey();
+
+      if (!isTodayDelivery) {
+        throw new BusinessRuleException(
+          'Order price can only be locked when delivery date is today',
+        );
+      }
+
+      const eggPrice = await this.prisma.eggPrice.findFirst({
+        where: {
+          effectiveDate: order.deliveryDate,
+          deletedAt: null,
+        },
+        select: { pricePerKg: true },
+      });
+
+      if (!eggPrice) {
+        throw new BusinessRuleException(
+          'Daily egg price for delivery date is not available',
+        );
+      }
+
+      lockedPricePerKg =
+        dto.customPricePerKg !== undefined
+          ? BigInt(dto.customPricePerKg)
+          : eggPrice.pricePerKg;
     }
 
     const totalInvoice = this.computeInvoice(
       Number(order.quantityKg),
-      eggPrice.pricePerKg,
+      lockedPricePerKg,
     );
 
     const movementDate = getTodayDateOnlyUtc();
@@ -131,7 +155,7 @@ export class DeliveriesService {
         data: {
           deliveryStatus: DeliveryStatus.SEDANG_DIHANTAR,
           startedById: user.id,
-          pricePerKg: eggPrice.pricePerKg,
+          pricePerKg: lockedPricePerKg,
           totalInvoice,
           updatedById: user.id,
           updatedAt: new Date(),
@@ -144,7 +168,7 @@ export class DeliveriesService {
     return {
       orderId,
       deliveryStatus: DeliveryStatus.SEDANG_DIHANTAR,
-      pricePerKg: eggPrice.pricePerKg,
+      pricePerKg: lockedPricePerKg,
       totalInvoice,
       allocations,
     };
