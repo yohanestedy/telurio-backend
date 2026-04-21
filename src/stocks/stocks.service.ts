@@ -9,6 +9,7 @@ import {
 import {
   buildPaginationMeta,
   BusinessRuleException,
+  ForbiddenException,
   generateUuidV7,
   getTodayDateOnlyUtc,
   NotFoundException,
@@ -88,6 +89,11 @@ export class StocksService {
     user: AuthUser,
     dto: CreateManualStockAdjustmentDto,
   ): Promise<ManualStockAdjustmentResponse> {
+    const allowedCoopIds = await this.getAllowedCoopIds(user);
+    if (!allowedCoopIds.includes(dto.coopId)) {
+      throw new ForbiddenException('Anda tidak memiliki akses ke kandang ini');
+    }
+
     const coop = await this.prisma.coop.findFirst({
       where: {
         id: dto.coopId,

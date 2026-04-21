@@ -24,17 +24,15 @@ export class StocksController {
     @CurrentUser() user: { id: string; role: Role },
     @Query() query: QueryStockMovementsDto,
   ): Promise<StockMovementListResponse> {
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-call
     return await this.stocksService.listMovements(user, query);
   }
 
   @Post('manual-adjustments')
-  @Roles(Role.ADMIN)
+  @Roles(Role.ADMIN, Role.OWNER, Role.OPERATOR)
   async createManualAdjustment(
     @CurrentUser() user: { id: string; role: Role },
     @Body() dto: CreateManualStockAdjustmentDto,
   ): Promise<ManualStockAdjustmentResponse> {
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-call
     return await this.stocksService.createManualAdjustment(user, dto);
   }
 }
