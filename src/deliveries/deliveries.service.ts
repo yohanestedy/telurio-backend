@@ -1,5 +1,10 @@
 import { Injectable } from '@nestjs/common';
-import { DeliveryStatus, OrderLifecycleStatus, Role } from '@prisma/client';
+import {
+  DeliveryStatus,
+  OrderLifecycleStatus,
+  OrderPriceSource,
+  Role,
+} from '@prisma/client';
 import { PrismaService } from '../prisma';
 import {
   BusinessRuleException,
@@ -85,6 +90,7 @@ export class DeliveriesService {
     }
 
     let lockedPricePerKg = order.pricePerKg;
+    let lockedPriceSource = order.priceSource;
 
     if (lockedPricePerKg === null) {
       const isTodayDelivery =
@@ -112,8 +118,12 @@ export class DeliveriesService {
 
       lockedPricePerKg =
         dto.customPricePerKg !== undefined
-          ? BigInt(dto.customPricePerKg)
+          ? BigInt(String(dto.customPricePerKg))
           : eggPrice.pricePerKg;
+      lockedPriceSource =
+        dto.customPricePerKg !== undefined
+          ? OrderPriceSource.CUSTOM
+          : OrderPriceSource.STANDARD;
     }
 
     const totalInvoice = this.computeInvoice(
@@ -156,6 +166,7 @@ export class DeliveriesService {
           deliveryStatus: DeliveryStatus.SEDANG_DIHANTAR,
           startedById: user.id,
           pricePerKg: lockedPricePerKg,
+          priceSource: lockedPriceSource,
           totalInvoice,
           updatedById: user.id,
           updatedAt: new Date(),
@@ -169,6 +180,7 @@ export class DeliveriesService {
       orderId,
       deliveryStatus: DeliveryStatus.SEDANG_DIHANTAR,
       pricePerKg: lockedPricePerKg,
+      priceSource: lockedPriceSource,
       totalInvoice,
       allocations,
     };

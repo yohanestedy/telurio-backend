@@ -34,6 +34,11 @@ enum PaymentMethod {
   TRANSFER
 }
 
+enum OrderPriceSource {
+  STANDARD
+  CUSTOM
+}
+
 enum StockMovementDirection {
   IN
   OUT
@@ -197,6 +202,8 @@ model Order {
   quantityKg       Decimal                 @db.Decimal(12, 3)
   // Locked when delivery starts via `Hantar`. May stay null until the delivery-date price exists.
   pricePerKg       BigInt?                 @db.BigInt
+  // Tracks whether locked price was taken from daily standard or manually overridden.
+  priceSource      OrderPriceSource?
   // Computed as quantityKg x pricePerKg with round-half-up to Rupiah.
   totalInvoice     BigInt?                 @db.BigInt
   // Past dates are allowed for late historical input, but such orders should become non-editable after creation.

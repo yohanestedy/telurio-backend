@@ -30,6 +30,14 @@ interface AuthUser {
   role: Role;
 }
 
+const ORDER_PRICE_SOURCE = {
+  STANDARD: 'STANDARD',
+  CUSTOM: 'CUSTOM',
+} as const;
+
+type OrderPriceSourceValue =
+  (typeof ORDER_PRICE_SOURCE)[keyof typeof ORDER_PRICE_SOURCE];
+
 @Injectable()
 export class OrdersService {
   constructor(private prisma: PrismaService) {}
@@ -114,23 +122,28 @@ export class OrdersService {
     const creatorMap = new Map(creators.map((item) => [item.id, item.name]));
 
     return {
-      data: rows.map((row) => ({
-        id: row.id,
-        customer: row.customer,
-        quantityKg: row.quantityKg.toString(),
-        pricePerKg: row.pricePerKg,
-        totalInvoice: row.totalInvoice,
-        deliveryDate: row.deliveryDate,
-        deliverBefore: row.deliverBefore,
-        lifecycleStatus: row.lifecycleStatus,
-        deliveryStatus: row.deliveryStatus,
-        paymentStatus: row.paymentStatus,
-        paymentMethod: row.paymentMethod,
-        dpAmount: row.dpAmount,
-        notes: row.notes,
-        createdByName: creatorMap.get(row.createdById) ?? null,
-        createdAt: row.createdAt,
-      })),
+      data: rows.map((row) => {
+        const rowData = row as Record<string, unknown>;
+
+        return {
+          id: row.id,
+          customer: row.customer,
+          quantityKg: row.quantityKg.toString(),
+          pricePerKg: row.pricePerKg,
+          priceSource: this.normalizePriceSource(rowData.priceSource),
+          totalInvoice: row.totalInvoice,
+          deliveryDate: row.deliveryDate,
+          deliverBefore: row.deliverBefore,
+          lifecycleStatus: row.lifecycleStatus,
+          deliveryStatus: row.deliveryStatus,
+          paymentStatus: row.paymentStatus,
+          paymentMethod: row.paymentMethod,
+          dpAmount: row.dpAmount,
+          notes: row.notes,
+          createdByName: creatorMap.get(row.createdById) ?? null,
+          createdAt: row.createdAt,
+        };
+      }),
       meta: buildPaginationMeta({
         page: query.page,
         limit: query.limit,
@@ -188,6 +201,7 @@ export class OrdersService {
     }
 
     let lockedPrice: bigint | null = null;
+    let lockedPriceSource: OrderPriceSourceValue | null = null;
     let totalInvoice: bigint | null = null;
 
     if (isTodayDelivery) {
@@ -211,8 +225,13 @@ export class OrdersService {
           : null;
 
       const selectedPricePerKg = customPricePerKg ?? eggPrice.pricePerKg;
+      const selectedPriceSource =
+        customPricePerKg !== null
+          ? ORDER_PRICE_SOURCE.CUSTOM
+          : ORDER_PRICE_SOURCE.STANDARD;
 
       lockedPrice = selectedPricePerKg;
+      lockedPriceSource = selectedPriceSource;
       totalInvoice = this.computeInvoice(dto.quantityKg, selectedPricePerKg);
     }
 
@@ -227,6 +246,7 @@ export class OrdersService {
           customerId: dto.customerId,
           quantityKg: dto.quantityKg,
           pricePerKg: lockedPrice,
+          priceSource: lockedPriceSource,
           totalInvoice,
           deliveryDate,
           deliverBefore: dto.deliverBefore ?? null,
@@ -295,6 +315,9 @@ export class OrdersService {
     const nextDateKey = toDateKey(nextDeliveryDate);
     const nextQuantityKg = dto.quantityKg ?? Number(existing.quantityKg);
     let nextPricePerKg: bigint | null = existing.pricePerKg;
+    const existingData = existing as Record<string, unknown>;
+    let nextPriceSource: OrderPriceSourceValue | null =
+      this.normalizePriceSource(existingData.priceSource);
     let nextTotalInvoice: bigint | null = existing.totalInvoice;
 
     if (
@@ -314,6 +337,7 @@ export class OrdersService {
 
       if (shouldKeepCurrentLockedPrice && currentLockedPrice !== null) {
         nextPricePerKg = currentLockedPrice;
+        nextPriceSource = this.normalizePriceSource(existingData.priceSource);
         nextTotalInvoice = this.computeInvoice(
           nextQuantityKg,
           currentLockedPrice,
@@ -334,6 +358,7 @@ export class OrdersService {
         }
 
         nextPricePerKg = eggPrice.pricePerKg;
+        nextPriceSource = ORDER_PRICE_SOURCE.STANDARD;
         nextTotalInvoice = this.computeInvoice(
           nextQuantityKg,
           eggPrice.pricePerKg,
@@ -341,6 +366,7 @@ export class OrdersService {
       }
     } else {
       nextPricePerKg = null;
+      nextPriceSource = null;
       nextTotalInvoice = null;
     }
 
@@ -354,6 +380,7 @@ export class OrdersService {
           : {}),
         ...(dto.notes !== undefined ? { notes: dto.notes } : {}),
         pricePerKg: nextPricePerKg,
+        priceSource: nextPriceSource,
         totalInvoice: nextTotalInvoice,
         updatedById: user.id,
         updatedAt: new Date(),
@@ -447,11 +474,14 @@ export class OrdersService {
       select: { name: true },
     });
 
+    const rowData = row as Record<string, unknown>;
+
     return {
       id: row.id,
       customer: row.customer,
       quantityKg: row.quantityKg.toString(),
       pricePerKg: row.pricePerKg,
+      priceSource: this.normalizePriceSource(rowData.priceSource),
       totalInvoice: row.totalInvoice,
       deliveryDate: row.deliveryDate,
       deliverBefore: row.deliverBefore,
@@ -469,6 +499,18 @@ export class OrdersService {
   private computeInvoice(quantityKg: number, pricePerKg: bigint): bigint {
     const raw = quantityKg * Number(pricePerKg);
     return BigInt(Math.round(raw));
+  }
+
+  private normalizePriceSource(value: unknown): OrderPriceSourceValue | null {
+    if (value === ORDER_PRICE_SOURCE.STANDARD) {
+      return ORDER_PRICE_SOURCE.STANDARD;
+    }
+
+    if (value === ORDER_PRICE_SOURCE.CUSTOM) {
+      return ORDER_PRICE_SOURCE.CUSTOM;
+    }
+
+    return null;
   }
 
   private async getAllowedCoopIds(user: AuthUser): Promise<string[]> {
