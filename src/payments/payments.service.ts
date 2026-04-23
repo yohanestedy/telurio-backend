@@ -65,8 +65,41 @@ export class PaymentsService {
       );
     }
 
-    const amountPaidBigint =
-      dto.amountPaid !== undefined ? BigInt(dto.amountPaid) : null;
+    let amountPaidBigint: bigint | null = null;
+
+    if (dto.paymentStatus === PaymentStatus.DP) {
+      if (dto.amountPaid === undefined) {
+        throw new BusinessRuleException('DP requires amountPaid');
+      }
+
+      amountPaidBigint = BigInt(dto.amountPaid);
+
+      if (amountPaidBigint <= BigInt(0)) {
+        throw new BusinessRuleException('DP amountPaid must be greater than 0');
+      }
+
+      if (
+        order.totalInvoice !== null &&
+        amountPaidBigint > order.totalInvoice
+      ) {
+        throw new BusinessRuleException(
+          'DP amountPaid cannot exceed total invoice',
+        );
+      }
+    }
+
+    if (dto.paymentStatus === PaymentStatus.LUNAS) {
+      const alreadyPaidDp = order.dpAmount ?? BigInt(0);
+      const outstanding = order.totalInvoice! - alreadyPaidDp;
+
+      if (outstanding < BigInt(0)) {
+        throw new BusinessRuleException(
+          'Order payment data is invalid: dpAmount exceeds total invoice',
+        );
+      }
+
+      amountPaidBigint = outstanding;
+    }
 
     await this.prisma.$transaction(async (tx) => {
       await tx.order.update({
@@ -132,16 +165,18 @@ export class PaymentsService {
       );
     }
 
-    if (current === PaymentStatus.BELUM_BAYAR && next !== PaymentStatus.DP) {
+    if (
+      current === PaymentStatus.BELUM_BAYAR &&
+      next !== PaymentStatus.DP &&
+      next !== PaymentStatus.LUNAS
+    ) {
       throw new BusinessRuleException(
-        'Valid payment flow: BELUM_BAYAR -> DP -> LUNAS',
+        'Valid payment flow: BELUM_BAYAR -> (DP or LUNAS)',
       );
     }
 
     if (current === PaymentStatus.DP && next !== PaymentStatus.LUNAS) {
-      throw new BusinessRuleException(
-        'Valid payment flow: BELUM_BAYAR -> DP -> LUNAS',
-      );
+      throw new BusinessRuleException('Valid payment flow: DP -> LUNAS');
     }
 
     if (current === PaymentStatus.LUNAS) {
