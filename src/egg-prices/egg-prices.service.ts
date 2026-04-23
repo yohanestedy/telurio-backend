@@ -9,7 +9,12 @@ import {
   generateUuidV7,
   parseDateOnlyUtc,
 } from '../common';
-import { CreateEggPriceDto, QueryEggPricesDto, UpdateEggPriceDto } from './dto';
+import {
+  CreateEggPriceDto,
+  QueryCurrentEggPriceDto,
+  QueryEggPricesDto,
+  UpdateEggPriceDto,
+} from './dto';
 
 interface AuthUser {
   id: string;
@@ -19,17 +24,23 @@ interface AuthUser {
 export class EggPricesService {
   constructor(private prisma: PrismaService) {}
 
-  async getCurrentPrice() {
-    const today = getTodayDateOnlyUtc();
+  async getCurrentPrice(query: QueryCurrentEggPriceDto = {}) {
+    const effectiveDate = query.date
+      ? parseDateOnlyUtc(query.date, 'date')
+      : getTodayDateOnlyUtc();
     const current = await this.prisma.eggPrice.findFirst({
       where: {
         deletedAt: null,
-        effectiveDate: today,
+        effectiveDate,
       },
     });
 
     if (!current) {
-      throw new NotFoundException('No egg price found for today');
+      throw new NotFoundException(
+        query.date
+          ? 'No egg price found for selected date'
+          : 'No egg price found for today',
+      );
     }
 
     return this.attachUpdatedByName(current);

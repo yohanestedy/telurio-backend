@@ -11,15 +11,20 @@ import {
 import { Role } from '@prisma/client';
 import { CurrentUser, Roles } from '../common';
 import { EggPricesService } from './egg-prices.service';
-import { CreateEggPriceDto, QueryEggPricesDto, UpdateEggPriceDto } from './dto';
+import {
+  CreateEggPriceDto,
+  QueryCurrentEggPriceDto,
+  QueryEggPricesDto,
+  UpdateEggPriceDto,
+} from './dto';
 
 @Controller('prices')
 export class EggPricesController {
   constructor(private eggPricesService: EggPricesService) {}
 
   @Get('current')
-  async getCurrentPrice() {
-    return await this.eggPricesService.getCurrentPrice();
+  async getCurrentPrice(@Query() query: QueryCurrentEggPriceDto) {
+    return await this.eggPricesService.getCurrentPrice(query);
   }
 
   @Get()

@@ -25,7 +25,7 @@ export class DeliveriesController {
   }
 
   @Post(':id/start-delivery')
-  @Roles(Role.ADMIN, Role.OPERATOR)
+  @Roles(Role.OPERATOR)
   async startDelivery(
     @Param('id', ParseUUIDPipe) id: string,
     @CurrentUser() user: { id: string; role: Role },
