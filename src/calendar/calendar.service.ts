@@ -38,6 +38,7 @@ export interface CalendarItem {
     }>;
     expenses: Array<{
       coopId: string;
+      coopName: string;
       totalAmount: bigint;
     }>;
     priceUpdates: Array<{
@@ -199,10 +200,15 @@ export class CalendarService {
       },
     });
 
+    const expenseCoopNames = await this.getCoopNames(
+      expenseRows.map((row) => row.coopId),
+    );
+
     for (const row of expenseRows) {
       const key = dayjs(row.date).format('YYYY-MM-DD');
       ensureDate(key).events.expenses.push({
         coopId: row.coopId,
+        coopName: expenseCoopNames.get(row.coopId) ?? '-',
         totalAmount: row._sum.amount ?? BigInt(0),
       });
     }
