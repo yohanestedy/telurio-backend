@@ -27,6 +27,8 @@ export interface CalendarItem {
       orderId: string;
       customerName: string;
       quantityKg: Prisma.Decimal;
+      pricePerKg: bigint | null;
+      totalInvoice: bigint | null;
       deliveryStatus: DeliveryStatus;
       paymentStatus: string;
     }>;
@@ -136,6 +138,8 @@ export class CalendarService {
         id: true,
         deliveryDate: true,
         quantityKg: true,
+        pricePerKg: true,
+        totalInvoice: true,
         deliveryStatus: true,
         paymentStatus: true,
         customer: { select: { name: true } },
@@ -148,6 +152,8 @@ export class CalendarService {
         orderId: order.id,
         customerName: order.customer.name,
         quantityKg: order.quantityKg,
+        pricePerKg: order.pricePerKg,
+        totalInvoice: order.totalInvoice,
         deliveryStatus: order.deliveryStatus,
         paymentStatus: order.paymentStatus,
       });
