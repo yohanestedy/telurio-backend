@@ -20,6 +20,16 @@ interface CalendarRange {
   endDate: Date;
 }
 
+export interface CalendarMarkerItem {
+  date: string;
+  markers: {
+    orders: number;
+    productions: number;
+    expenses: number;
+    priceUpdates: number;
+  };
+}
+
 export interface CalendarItem {
   date: string;
   events: {
@@ -56,6 +66,11 @@ export class CalendarService {
   async listEvents(user: AuthUser, query: QueryCalendarDto) {
     const range = this.resolveRange(query);
     return await this.fetchCalendarData(user, range);
+  }
+
+  async listMarkers(user: AuthUser, query: QueryCalendarDto) {
+    const range = this.resolveRange(query);
+    return await this.fetchCalendarMarkers(user, range);
   }
 
   async getDayEvents(user: AuthUser, date: string) {
@@ -246,6 +261,113 @@ export class CalendarService {
     return [...calendarMap.values()].sort((a, b) =>
       a.date.localeCompare(b.date),
     );
+  }
+
+  private async fetchCalendarMarkers(user: AuthUser, range: CalendarRange) {
+    const scopedCoopIds = await this.getScopedCoopIds(user);
+    const markerMap = new Map<string, CalendarMarkerItem>();
+
+    const ensureDate = (date: string): CalendarMarkerItem => {
+      const existing = markerMap.get(date);
+      if (existing) {
+        return existing;
+      }
+
+      const item: CalendarMarkerItem = {
+        date,
+        markers: {
+          orders: 0,
+          productions: 0,
+          expenses: 0,
+          priceUpdates: 0,
+        },
+      };
+
+      markerMap.set(date, item);
+      return item;
+    };
+
+    const ordersWhere: Prisma.OrderWhereInput = {
+      deliveryDate: { gte: range.startDate, lte: range.endDate },
+      lifecycleStatus: OrderLifecycleStatus.ACTIVE,
+      ...(user.role === Role.ADMIN
+        ? {}
+        : user.role === Role.OPERATOR
+          ? {
+              OR: [
+                {
+                  deliveryStatus: DeliveryStatus.BELUM_DIHANTAR,
+                  lifecycleStatus: OrderLifecycleStatus.ACTIVE,
+                },
+                {
+                  allocations: { some: { coopId: { in: scopedCoopIds } } },
+                },
+              ],
+            }
+          : {
+              allocations: { some: { coopId: { in: scopedCoopIds } } },
+            }),
+    };
+
+    const orderDates = await this.prisma.order.findMany({
+      where: ordersWhere,
+      select: {
+        deliveryDate: true,
+      },
+    });
+
+    for (const row of orderDates) {
+      const key = dayjs(row.deliveryDate).format('YYYY-MM-DD');
+      ensureDate(key).markers.orders += 1;
+    }
+
+    const productionRows = await this.prisma.productionRecord.groupBy({
+      by: ['date', 'coopId'],
+      where: {
+        deletedAt: null,
+        date: { gte: range.startDate, lte: range.endDate },
+        ...(user.role === Role.ADMIN ? {} : { coopId: { in: scopedCoopIds } }),
+      },
+    });
+
+    for (const row of productionRows) {
+      const key = dayjs(row.date).format('YYYY-MM-DD');
+      ensureDate(key).markers.productions += 1;
+    }
+
+    const expenseRows = await this.prisma.expense.groupBy({
+      by: ['date', 'coopId'],
+      where: {
+        deletedAt: null,
+        date: { gte: range.startDate, lte: range.endDate },
+        ...(user.role === Role.ADMIN ? {} : { coopId: { in: scopedCoopIds } }),
+      },
+    });
+
+    for (const row of expenseRows) {
+      const key = dayjs(row.date).format('YYYY-MM-DD');
+      ensureDate(key).markers.expenses += 1;
+    }
+
+    const priceRows = await this.prisma.eggPrice.findMany({
+      where: {
+        deletedAt: null,
+        effectiveDate: {
+          gte: range.startDate,
+          lte: range.endDate,
+        },
+      },
+      select: {
+        effectiveDate: true,
+      },
+    });
+
+    for (const row of priceRows) {
+      const key = dayjs(row.effectiveDate).format('YYYY-MM-DD');
+      ensureDate(key).markers.priceUpdates += 1;
+    }
+
+    return [...markerMap.values()].sort((a, b) => a.date.localeCompare(b.date));
   }
 
   private resolveRange(query: QueryCalendarDto): CalendarRange {

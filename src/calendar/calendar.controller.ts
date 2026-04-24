@@ -17,6 +17,15 @@ export class CalendarController {
     return await this.service.listEvents(user, query);
   }
 
+  @Get('markers')
+  @Roles(Role.ADMIN, Role.OWNER, Role.OPERATOR)
+  async markers(
+    @CurrentUser() user: { id: string; role: Role },
+    @Query() query: QueryCalendarDto,
+  ) {
+    return await this.service.listMarkers(user, query);
+  }
+
   @Get(':date')
   @Roles(Role.ADMIN, Role.OWNER, Role.OPERATOR)
   async detail(
