@@ -44,7 +44,7 @@ export class DeliveriesController {
   }
 
   @Patch(':id/allocations')
-  @Roles(Role.ADMIN)
+  @Roles(Role.OPERATOR)
   async updateAllocations(
     @Param('id', ParseUUIDPipe) id: string,
     @CurrentUser() user: { id: string; role: Role },

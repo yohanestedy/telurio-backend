@@ -231,14 +231,7 @@ export class DeliveriesService {
     this.validateAllocationTotal(Number(order.quantityKg), dto.allocations);
 
     const coopIds = dto.allocations.map((item) => item.coopId);
-    const coops = await this.prisma.coop.findMany({
-      where: { id: { in: coopIds }, deletedAt: null },
-      select: { id: true },
-    });
-
-    if (coops.length !== coopIds.length) {
-      throw new NotFoundException('One or more coop ids are not found');
-    }
+    await this.validateAllocationScope(user, coopIds);
 
     const existingAllocations =
       await this.prisma.orderSourceAllocation.findMany({
