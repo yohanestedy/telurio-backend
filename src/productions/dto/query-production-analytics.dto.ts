@@ -1,4 +1,4 @@
-import { IsIn, IsOptional, IsUUID } from 'class-validator';
+import { IsDateString, IsIn, IsOptional, IsUUID } from 'class-validator';
 
 export const productionAnalyticsPeriods = ['1w', '1m', '3m', '6m'] as const;
 export type ProductionAnalyticsPeriod =
@@ -12,4 +12,8 @@ export class QueryProductionAnalyticsDto {
   @IsOptional()
   @IsUUID()
   coopId?: string;
+
+  @IsOptional()
+  @IsDateString()
+  endDate?: string;
 }

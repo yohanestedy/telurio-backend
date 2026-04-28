@@ -10,6 +10,7 @@ import {
   buildPaginationMeta,
   getTodayDateOnlyUtc,
   generateUuidV7,
+  parseDateOnlyUtc,
   toDateKey,
 } from '../common';
 import {
@@ -139,7 +140,9 @@ export class ProductionsService {
   ) {
     const period = query.period ?? '1w';
     const days = this.getAnalyticsPeriodDays(period);
-    const endDate = getTodayDateOnlyUtc();
+    const endDate = query.endDate
+      ? parseDateOnlyUtc(query.endDate, 'endDate')
+      : getTodayDateOnlyUtc();
     const startDate = dayjs(endDate)
       .subtract(days - 1, 'day')
       .toDate();
