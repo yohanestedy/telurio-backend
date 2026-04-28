@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import dayjs from 'dayjs';
 import { Prisma, Role } from '@prisma/client';
 import { PrismaService } from '../prisma';
 import { StocksService } from '../stocks';
@@ -9,10 +10,13 @@ import {
   buildPaginationMeta,
   getTodayDateOnlyUtc,
   generateUuidV7,
+  toDateKey,
 } from '../common';
 import {
   CreateProductionDto,
   DeleteProductionDto,
+  QueryProductionAnalyticsDto,
+  ProductionAnalyticsPeriod,
   QueryProductionsDto,
   UpdateProductionDto,
 } from './dto';
@@ -106,6 +110,7 @@ export class ProductionsService {
         goodKg: row.goodKg.toString(),
         goodCount: row.goodCount,
         brokenCount: row.brokenCount,
+        populationSnapshot: row.populationSnapshot,
         notes: row.notes,
         createdByName: userMap.get(row.createdById) ?? null,
         createdAt: row.createdAt,
@@ -128,6 +133,78 @@ export class ProductionsService {
     };
   }
 
+  async getProductionAnalytics(
+    user: AuthUser,
+    query: QueryProductionAnalyticsDto,
+  ) {
+    const period = query.period ?? '1w';
+    const days = this.getAnalyticsPeriodDays(period);
+    const endDate = getTodayDateOnlyUtc();
+    const startDate = dayjs(endDate)
+      .subtract(days - 1, 'day')
+      .toDate();
+    const previousEndDate = dayjs(startDate).subtract(1, 'day').toDate();
+    const previousStartDate = dayjs(previousEndDate)
+      .subtract(days - 1, 'day')
+      .toDate();
+
+    const allowedCoopIds = await this.getAllowedCoopIds(user);
+    if (
+      query.coopId &&
+      user.role !== Role.ADMIN &&
+      !allowedCoopIds.includes(query.coopId)
+    ) {
+      throw new ForbiddenException('Coop is outside your scope');
+    }
+
+    const coopFilter: Prisma.ProductionRecordWhereInput['coopId'] =
+      query.coopId
+        ? query.coopId
+        : user.role === Role.ADMIN
+          ? undefined
+          : { in: allowedCoopIds };
+
+    const [currentRows, previousRows] = await Promise.all([
+      this.getAnalyticsRows(startDate, endDate, coopFilter),
+      this.getAnalyticsRows(previousStartDate, previousEndDate, coopFilter),
+    ]);
+
+    const series = this.buildAnalyticsSeries(startDate, days, currentRows);
+    const previousSeries = this.buildAnalyticsSeries(
+      previousStartDate,
+      days,
+      previousRows,
+    );
+    const summary = this.buildAnalyticsSummary(series);
+    const previousSummary = this.buildAnalyticsSummary(previousSeries);
+
+    return {
+      period,
+      coopId: query.coopId ?? null,
+      startDate: toDateKey(startDate),
+      endDate: toDateKey(endDate),
+      previousStartDate: toDateKey(previousStartDate),
+      previousEndDate: toDateKey(previousEndDate),
+      summary,
+      previousSummary,
+      changes: {
+        totalGoodCountPercent: this.percentChange(
+          summary.totalGoodCount,
+          previousSummary.totalGoodCount,
+        ),
+        averageDailyGoodCountPercent: this.percentChange(
+          summary.averageDailyGoodCount,
+          previousSummary.averageDailyGoodCount,
+        ),
+        averagePerformancePercent: this.percentChange(
+          summary.averagePerformancePercent,
+          previousSummary.averagePerformancePercent,
+        ),
+      },
+      series,
+    };
+  }
+
   async createProduction(user: AuthUser, dto: CreateProductionDto) {
     if (user.role !== Role.ADMIN && user.role !== Role.OPERATOR) {
       throw new ForbiddenException(
@@ -142,7 +219,7 @@ export class ProductionsService {
 
     const coop = await this.prisma.coop.findFirst({
       where: { id: dto.coopId, deletedAt: null },
-      select: { id: true },
+      select: { id: true, population: true },
     });
 
     if (!coop) {
@@ -175,6 +252,7 @@ export class ProductionsService {
           goodKg: dto.goodKg,
           goodCount: dto.goodCount,
           brokenCount: dto.brokenCount ?? null,
+          populationSnapshot: coop.population,
           notes: dto.notes ?? null,
           createdById: user.id,
         },
@@ -203,6 +281,7 @@ export class ProductionsService {
       goodKg: created.goodKg.toString(),
       goodCount: created.goodCount,
       brokenCount: created.brokenCount,
+      populationSnapshot: created.populationSnapshot,
       notes: created.notes,
       createdByName: null,
       createdAt: created.createdAt,
@@ -258,6 +337,7 @@ export class ProductionsService {
       goodKg: updated.goodKg.toString(),
       goodCount: updated.goodCount,
       brokenCount: updated.brokenCount,
+      populationSnapshot: updated.populationSnapshot,
       notes: updated.notes,
       createdAt: updated.createdAt,
     };
@@ -316,5 +396,137 @@ export class ProductionsService {
     });
 
     return accesses.map((item) => item.coopId);
+  }
+
+  private getAnalyticsPeriodDays(period: ProductionAnalyticsPeriod) {
+    return {
+      '1w': 7,
+      '1m': 30,
+      '3m': 90,
+      '6m': 180,
+    }[period];
+  }
+
+  private async getAnalyticsRows(
+    startDate: Date,
+    endDate: Date,
+    coopFilter: Prisma.ProductionRecordWhereInput['coopId'],
+  ) {
+    return await this.prisma.productionRecord.findMany({
+      where: {
+        deletedAt: null,
+        ...(coopFilter ? { coopId: coopFilter } : {}),
+        date: {
+          gte: startDate,
+          lte: endDate,
+        },
+      },
+      select: {
+        date: true,
+        coopId: true,
+        goodCount: true,
+        populationSnapshot: true,
+      },
+      orderBy: {
+        date: 'asc',
+      },
+    });
+  }
+
+  private buildAnalyticsSeries(
+    startDate: Date,
+    days: number,
+    rows: Awaited<ReturnType<ProductionsService['getAnalyticsRows']>>,
+  ) {
+    const rowMap = new Map<
+      string,
+      {
+        goodCount: number;
+        populationByCoop: Map<string, number>;
+      }
+    >();
+
+    for (const row of rows) {
+      const key = toDateKey(row.date);
+      const bucket =
+        rowMap.get(key) ??
+        {
+          goodCount: 0,
+          populationByCoop: new Map<string, number>(),
+        };
+
+      bucket.goodCount += row.goodCount;
+      if (row.populationSnapshot !== null) {
+        bucket.populationByCoop.set(row.coopId, row.populationSnapshot);
+      }
+
+      rowMap.set(key, bucket);
+    }
+
+    return Array.from({ length: days }, (_, index) => {
+      const date = dayjs(startDate).add(index, 'day').toDate();
+      const dateKey = toDateKey(date);
+      const row = rowMap.get(dateKey);
+      const hasProduction = Boolean(row);
+      const goodCount = row?.goodCount ?? 0;
+      const population = row?.populationByCoop.size
+        ? [...row.populationByCoop.values()].reduce((sum, item) => sum + item, 0)
+        : null;
+      const performancePercent =
+        population && population > 0
+          ? Number(((goodCount / population) * 100).toFixed(1))
+          : null;
+
+      return {
+        date: dateKey,
+        hasProduction,
+        goodCount,
+        averagePopulation: population ? Math.round(population) : null,
+        performancePercent,
+      };
+    });
+  }
+
+  private buildAnalyticsSummary(
+    series: ReturnType<ProductionsService['buildAnalyticsSeries']>,
+  ) {
+    const totalGoodCount = series.reduce((sum, item) => sum + item.goodCount, 0);
+    const populationItems = series.filter(
+      (item) => item.averagePopulation !== null,
+    );
+    const performanceItems = series.filter(
+      (item) => item.performancePercent !== null,
+    );
+
+    return {
+      totalGoodCount,
+      averageDailyGoodCount: Math.round(totalGoodCount / series.length),
+      averagePerformancePercent: performanceItems.length
+        ? Number(
+            (
+              performanceItems.reduce(
+                (sum, item) => sum + (item.performancePercent ?? 0),
+                0,
+              ) / performanceItems.length
+            ).toFixed(1),
+          )
+        : null,
+      averagePopulation: populationItems.length
+        ? Math.round(
+            populationItems.reduce(
+              (sum, item) => sum + (item.averagePopulation ?? 0),
+              0,
+            ) / populationItems.length,
+          )
+        : null,
+    };
+  }
+
+  private percentChange(current: number | null, previous: number | null) {
+    if (current === null || previous === null || previous === 0) {
+      return null;
+    }
+
+    return Number((((current - previous) / previous) * 100).toFixed(1));
   }
 }

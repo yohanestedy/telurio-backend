@@ -32,6 +32,15 @@ export class UpdateCoopDto {
   chickBirthDate?: string | null;
 
   @IsOptional()
+  @IsDateString()
+  populationEffectiveDate?: string;
+
+  @IsOptional()
+  @IsString()
+  @Length(1, 255)
+  populationChangeReason?: string;
+
+  @IsOptional()
   @Type(() => Number)
   @IsNumber({ maxDecimalPlaces: 2 })
   @Min(0)

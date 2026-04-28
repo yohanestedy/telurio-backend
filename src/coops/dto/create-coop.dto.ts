@@ -29,6 +29,11 @@ export class CreateCoopDto {
   chickBirthDate?: string;
 
   @IsOptional()
+  @IsString()
+  @Length(1, 255)
+  populationChangeReason?: string;
+
+  @IsOptional()
   @Type(() => Number)
   @IsNumber({ maxDecimalPlaces: 2 })
   @Min(0)

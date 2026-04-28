@@ -69,6 +69,11 @@ enum AuditActionType {
   DEACTIVATE
 }
 
+enum CoopPopulationChangeType {
+  INITIAL
+  ADJUSTMENT
+}
+
 model User {
   id                     String            @id @db.Uuid
   name                   String
@@ -111,10 +116,28 @@ model Coop {
   expenses            Expense[]
   stockBalance        CoopStockBalance?
   stockMovements      StockMovement[]
+  populationHistories CoopPopulationHistory[]
 
   @@unique([name])
   @@index([isActive])
   @@index([deletedAt])
+}
+
+model CoopPopulationHistory {
+  id                 String                   @id @db.Uuid
+  coopId             String                   @db.Uuid
+  effectiveDate      DateTime                 @db.Date
+  previousPopulation Int?
+  newPopulation      Int
+  deltaPopulation    Int
+  changeType         CoopPopulationChangeType @default(ADJUSTMENT)
+  reason             String?
+  createdById        String                   @db.Uuid
+  createdAt          DateTime                 @default(now())
+  coop               Coop                     @relation(fields: [coopId], references: [id])
+
+  @@index([coopId, effectiveDate])
+  @@index([effectiveDate])
 }
 
 model UserCoopAccess {
@@ -157,22 +180,23 @@ model Customer {
 }
 
 model ProductionRecord {
-  id             String    @id @db.Uuid
-  date           DateTime  @db.Date
-  coopId         String    @db.Uuid
-  collectionTime String
-  goodKg         Decimal   @db.Decimal(12, 3)
-  goodCount      Int
-  brokenCount    Int?
-  notes          String?
-  createdById    String    @db.Uuid
-  updatedById    String?   @db.Uuid
-  deletedAt      DateTime?
-  deletedById    String?   @db.Uuid
-  deleteReason   String?
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime?
-  coop           Coop      @relation(fields: [coopId], references: [id])
+  id                 String    @id @db.Uuid
+  date               DateTime  @db.Date
+  coopId             String    @db.Uuid
+  collectionTime     String
+  goodKg             Decimal   @db.Decimal(12, 3)
+  goodCount          Int
+  brokenCount        Int?
+  populationSnapshot Int?
+  notes              String?
+  createdById        String    @db.Uuid
+  updatedById        String?   @db.Uuid
+  deletedAt          DateTime?
+  deletedById        String?   @db.Uuid
+  deleteReason       String?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime?
+  coop               Coop      @relation(fields: [coopId], references: [id])
 
   @@unique([date, coopId, collectionTime])
   @@index([coopId, date])

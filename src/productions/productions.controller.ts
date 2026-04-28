@@ -14,6 +14,7 @@ import { CurrentUser, Roles } from '../common';
 import {
   CreateProductionDto,
   DeleteProductionDto,
+  QueryProductionAnalyticsDto,
   QueryProductionsDto,
   UpdateProductionDto,
 } from './dto';
@@ -29,6 +30,14 @@ export class ProductionsController {
     @Query() query: QueryProductionsDto,
   ) {
     return await this.productionsService.listProductions(user, query);
+  }
+
+  @Get('analytics')
+  async analytics(
+    @CurrentUser() user: { id: string; role: Role },
+    @Query() query: QueryProductionAnalyticsDto,
+  ) {
+    return await this.productionsService.getProductionAnalytics(user, query);
   }
 
   @Post()
