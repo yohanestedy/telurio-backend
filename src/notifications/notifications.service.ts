@@ -194,6 +194,7 @@ export class NotificationsService {
 
   private formatDateTimeId(value: Date | string) {
     return new Intl.DateTimeFormat('id-ID', {
+      timeZone: 'Asia/Jakarta',
       day: '2-digit',
       month: 'short',
       year: 'numeric',
