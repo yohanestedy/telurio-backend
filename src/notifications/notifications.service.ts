@@ -54,6 +54,7 @@ export class NotificationsService {
     );
 
     if (this.isTodayDeliveryDate(order.deliveryDate)) {
+      await this.wait(2000);
       const todayOrdersMessage = await this.buildTodayOrdersMessage();
       await this.sendMessage(
         target,
@@ -152,6 +153,10 @@ export class NotificationsService {
 
   private isTodayDeliveryDate(value: Date | string) {
     return toDateKey(new Date(value)) === toDateKey(getTodayDateOnlyUtc());
+  }
+
+  private wait(milliseconds: number) {
+    return new Promise((resolve) => setTimeout(resolve, milliseconds));
   }
 
   private formatKg(value: string | number) {
