@@ -8,6 +8,7 @@ import {
 } from '@prisma/client';
 import dayjs from 'dayjs';
 import { PrismaService } from '../prisma';
+import { NotificationsService } from '../notifications';
 import {
   BusinessRuleException,
   buildPaginationMeta,
@@ -40,7 +41,10 @@ type OrderPriceSourceValue =
 
 @Injectable()
 export class OrdersService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private notificationsService: NotificationsService,
+  ) {}
 
   async getOrderDetail(id: string, user: AuthUser) {
     await this.ensureOrderAccess(id, user);
@@ -280,7 +284,10 @@ export class OrdersService {
       return order;
     });
 
-    return this.getOrderById(created.id);
+    const orderDetail = await this.getOrderById(created.id);
+    void this.notificationsService.notifyOrderCreated(orderDetail);
+
+    return orderDetail;
   }
 
   async updateOrder(id: string, user: AuthUser, dto: UpdateOrderDto) {
