@@ -7,7 +7,7 @@ import {
 } from '@prisma/client';
 import dayjs from 'dayjs';
 import { PrismaService } from '../prisma';
-import { BusinessRuleException } from '../common';
+import { BusinessRuleException, getTodayDateOnlyUtc, toDateKey } from '../common';
 import { QueryCalendarDto } from './dto';
 
 interface AuthUser {
@@ -345,7 +345,7 @@ export class CalendarService {
     });
 
     for (const row of expenseRows) {
-      const key = dayjs(row.date).format('YYYY-MM-DD');
+      const key = toDateKey(row.date);
       ensureDate(key).markers.expenses += 1;
     }
 
@@ -363,7 +363,7 @@ export class CalendarService {
     });
 
     for (const row of priceRows) {
-      const key = dayjs(row.effectiveDate).format('YYYY-MM-DD');
+      const key = toDateKey(row.effectiveDate);
       ensureDate(key).markers.priceUpdates += 1;
     }
 
@@ -371,7 +371,7 @@ export class CalendarService {
   }
 
   private resolveRange(query: QueryCalendarDto): CalendarRange {
-    const today = dayjs();
+    const today = dayjs(getTodayDateOnlyUtc());
 
     if (query.startDate || query.endDate) {
       if (!query.startDate || !query.endDate) {

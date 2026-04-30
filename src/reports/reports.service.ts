@@ -10,6 +10,7 @@ import { PrismaService } from '../prisma';
 import {
   BusinessRuleException,
   ForbiddenException,
+  getTodayDateOnlyUtc,
   NotFoundException,
 } from '../common';
 
@@ -223,7 +224,7 @@ export class ReportsService {
   }
 
   private getPeriod(month?: number, year?: number): ReportPeriod {
-    const now = dayjs();
+    const now = dayjs(getTodayDateOnlyUtc());
     const resolvedMonth = month ?? now.month() + 1;
     const resolvedYear = year ?? now.year();
 

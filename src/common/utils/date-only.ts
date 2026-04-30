@@ -1,5 +1,6 @@
-import dayjs from 'dayjs';
 import { BusinessRuleException } from './exceptions';
+
+export const BUSINESS_TIME_ZONE = 'Asia/Jakarta';
 
 export function parseDateOnlyUtc(value: string, label = 'date'): Date {
   const dateKey = value.slice(0, 10);
@@ -20,8 +21,30 @@ export function toDateKey(value: Date): string {
   return value.toISOString().slice(0, 10);
 }
 
+export function getDateKeyInTimeZone(
+  value = new Date(),
+  timeZone = BUSINESS_TIME_ZONE,
+): string {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(value);
+
+  const year = parts.find((part) => part.type === 'year')?.value;
+  const month = parts.find((part) => part.type === 'month')?.value;
+  const day = parts.find((part) => part.type === 'day')?.value;
+
+  if (!year || !month || !day) {
+    throw new BusinessRuleException('Invalid business date value');
+  }
+
+  return `${year}-${month}-${day}`;
+}
+
 export function getTodayDateKey(): string {
-  return dayjs().format('YYYY-MM-DD');
+  return getDateKeyInTimeZone();
 }
 
 export function getTodayDateOnlyUtc(): Date {

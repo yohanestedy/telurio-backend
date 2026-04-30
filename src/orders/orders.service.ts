@@ -6,7 +6,6 @@ import {
   Prisma,
   Role,
 } from '@prisma/client';
-import dayjs from 'dayjs';
 import { PrismaService } from '../prisma';
 import { NotificationsService } from '../notifications';
 import {
@@ -15,6 +14,7 @@ import {
   ForbiddenException,
   NotFoundException,
   getTodayDateKey,
+  getTodayDateOnlyUtc,
   generateUuidV7,
   parseDateOnlyUtc,
   toDateKey,
@@ -306,9 +306,8 @@ export class OrdersService {
       throw new BusinessRuleException('Order is not editable');
     }
 
-    const today = dayjs().startOf('day');
-    const existingDate = dayjs(existing.deliveryDate).startOf('day');
-    if (existingDate.isBefore(today)) {
+    const today = getTodayDateOnlyUtc();
+    if (existing.deliveryDate < today) {
       throw new BusinessRuleException('Past-date order is not editable');
     }
 
