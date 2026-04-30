@@ -1,6 +1,11 @@
-import { Injectable, Logger } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  OnModuleDestroy,
+  OnModuleInit,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { OrderLifecycleStatus } from '@prisma/client';
+import { DeliveryStatus, OrderLifecycleStatus } from '@prisma/client';
 import { getTodayDateOnlyUtc, toDateKey } from '../common';
 import { PrismaService } from '../prisma';
 import { FonnteClient } from './fonnte.client';
@@ -25,14 +30,29 @@ interface OrderCreatedNotificationPayload {
 }
 
 @Injectable()
-export class NotificationsService {
+export class NotificationsService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(NotificationsService.name);
+  private readonly sentReminderKeys = new Set<string>();
+  private reminderTimer: NodeJS.Timeout | null = null;
 
   constructor(
     private readonly configService: ConfigService,
     private readonly prisma: PrismaService,
     private readonly fonnteClient: FonnteClient,
   ) {}
+
+  onModuleInit() {
+    this.reminderTimer = setInterval(() => {
+      void this.runScheduledOrderReminder();
+    }, 60_000);
+  }
+
+  onModuleDestroy() {
+    if (this.reminderTimer) {
+      clearInterval(this.reminderTimer);
+      this.reminderTimer = null;
+    }
+  }
 
   async notifyOrderCreated(order: OrderCreatedNotificationPayload) {
     if (!this.isWhatsAppEnabled()) {
@@ -122,7 +142,7 @@ export class NotificationsService {
     const lines = orders.map((order, index) =>
       [
         `${index + 1}. ${order.customer.name}`,
-        `${this.formatKg(order.quantityKg.toString())} kg @ ${order.pricePerKg ? this.formatNumber(order.pricePerKg) : 'Belum dikunci'}`,
+        `*${this.formatKg(order.quantityKg.toString())}* kg @${order.pricePerKg ? this.formatNumber(order.pricePerKg) : 'Belum dikunci'}`,
         order.totalInvoice
           ? this.formatNumber(order.totalInvoice)
           : 'Belum dihitung',
@@ -137,6 +157,104 @@ export class NotificationsService {
       '',
       ...(lines.length ? lines : ['Belum ada pesanan untuk hari ini.']),
     ].join('\n');
+  }
+
+  private async runScheduledOrderReminder() {
+    if (!this.isWhatsAppEnabled()) {
+      return;
+    }
+
+    const now = this.getJakartaDateTimeParts();
+    if (!['17:00', '19:00'].includes(now.time)) {
+      return;
+    }
+
+    const reminderKey = `${now.dateKey}-${now.time}`;
+    if (this.sentReminderKeys.has(reminderKey)) {
+      return;
+    }
+    this.sentReminderKeys.add(reminderKey);
+
+    const target = this.configService.get<string>('FONNTE_GROUP_FAMILY_ID');
+    if (!target) {
+      this.logger.warn(
+        'FONNTE_GROUP_FAMILY_ID is not configured; order reminder skipped',
+      );
+      return;
+    }
+
+    const message = await this.buildTodayDeliveryReminderMessage(now.dateKey);
+    if (!message) {
+      return;
+    }
+
+    await this.sendMessage(target, message, 'today-delivery-reminder');
+  }
+
+  private async buildTodayDeliveryReminderMessage(dateKey: string) {
+    const today = new Date(`${dateKey}T00:00:00.000Z`);
+    const orders = await this.prisma.order.findMany({
+      where: {
+        deliveryDate: today,
+        lifecycleStatus: OrderLifecycleStatus.ACTIVE,
+        deliveryStatus: {
+          in: [DeliveryStatus.BELUM_DIHANTAR, DeliveryStatus.SEDANG_DIHANTAR],
+        },
+      },
+      include: {
+        customer: { select: { name: true } },
+      },
+      orderBy: [{ deliveryStatus: 'asc' }, { createdAt: 'asc' }],
+    });
+
+    if (orders.length === 0) {
+      return null;
+    }
+
+    const pendingOrders = orders.filter(
+      (order) => order.deliveryStatus === DeliveryStatus.BELUM_DIHANTAR,
+    );
+    const inDeliveryOrders = orders.filter(
+      (order) => order.deliveryStatus === DeliveryStatus.SEDANG_DIHANTAR,
+    );
+    const lines = [
+      '🚨 *Tugas Belum Selesai*',
+      this.formatLongDateId(today),
+      '',
+    ];
+
+    if (pendingOrders.length > 0) {
+      lines.push(
+        '🟠 *Belum Dihantar*',
+        ...pendingOrders.map((order, index) =>
+          this.formatReminderOrderLine(order, index),
+        ),
+        '',
+      );
+    }
+
+    if (inDeliveryOrders.length > 0) {
+      lines.push(
+        '🔵 *Sedang Dihantar*',
+        ...inDeliveryOrders.map((order, index) =>
+          this.formatReminderOrderLine(order, index),
+        ),
+        '_Jika sudah sampai, mohon selesaikan pengantaran._',
+      );
+    }
+
+    return lines.join('\n').trim();
+  }
+
+  private formatReminderOrderLine(
+    order: {
+      customer: { name: string };
+      quantityKg: { toString(): string };
+      paymentStatus: string;
+    },
+    index: number,
+  ) {
+    return `${index + 1}. ${order.customer.name} | *${this.formatKg(order.quantityKg.toString())}* kg | ${this.paymentStatusLabel(order.paymentStatus)}`;
   }
 
   private async sendMessage(target: string, message: string, context: string) {
@@ -157,6 +275,25 @@ export class NotificationsService {
 
   private wait(milliseconds: number) {
     return new Promise((resolve) => setTimeout(resolve, milliseconds));
+  }
+
+  private getJakartaDateTimeParts() {
+    const parts = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Asia/Jakarta',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      hourCycle: 'h23',
+    }).formatToParts(new Date());
+    const value = (type: Intl.DateTimeFormatPartTypes) =>
+      parts.find((part) => part.type === type)?.value ?? '';
+
+    return {
+      dateKey: `${value('year')}-${value('month')}-${value('day')}`,
+      time: `${value('hour')}:${value('minute')}`,
+    };
   }
 
   private formatKg(value: string | number) {
