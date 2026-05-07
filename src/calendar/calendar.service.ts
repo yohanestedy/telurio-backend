@@ -7,7 +7,11 @@ import {
 } from '@prisma/client';
 import dayjs from 'dayjs';
 import { PrismaService } from '../prisma';
-import { BusinessRuleException, getTodayDateOnlyUtc, toDateKey } from '../common';
+import {
+  BusinessRuleException,
+  getTodayDateOnlyUtc,
+  toDateKey,
+} from '../common';
 import { QueryCalendarDto } from './dto';
 
 interface AuthUser {
@@ -26,6 +30,7 @@ export interface CalendarMarkerItem {
     orders: number;
     productions: number;
     expenses: number;
+    generalExpenses: number;
     priceUpdates: number;
   };
 }
@@ -52,6 +57,12 @@ export interface CalendarItem {
       coopId: string;
       coopName: string;
       totalAmount: bigint;
+    }>;
+    generalExpenses: Array<{
+      id: string;
+      description: string;
+      amount: bigint;
+      categoryName: string | null;
     }>;
     priceUpdates: Array<{
       pricePerKg: bigint;
@@ -93,6 +104,7 @@ export class CalendarService {
           orders: [],
           productions: [],
           expenses: [],
+          generalExpenses: [],
           priceUpdates: [],
         },
       }
@@ -116,6 +128,7 @@ export class CalendarService {
           orders: [],
           productions: [],
           expenses: [],
+          generalExpenses: [],
           priceUpdates: [],
         },
       };
@@ -258,6 +271,35 @@ export class CalendarService {
       });
     }
 
+    // General expenses (non-coop) — scoped per owner
+    if (user.role === Role.ADMIN || user.role === Role.OWNER) {
+      const generalExpenseRows = await this.prisma.generalExpense.findMany({
+        where: {
+          deletedAt: null,
+          date: { gte: range.startDate, lte: range.endDate },
+          ...(user.role === Role.OWNER ? { ownerId: user.id } : {}),
+        },
+        orderBy: { date: 'asc' },
+        select: {
+          id: true,
+          date: true,
+          description: true,
+          amount: true,
+          category: { select: { name: true } },
+        },
+      });
+
+      for (const row of generalExpenseRows) {
+        const key = dayjs(row.date).format('YYYY-MM-DD');
+        ensureDate(key).events.generalExpenses.push({
+          id: row.id,
+          description: row.description,
+          amount: row.amount,
+          categoryName: row.category?.name ?? null,
+        });
+      }
+    }
+
     return [...calendarMap.values()].sort((a, b) =>
       a.date.localeCompare(b.date),
     );
@@ -279,6 +321,7 @@ export class CalendarService {
           orders: 0,
           productions: 0,
           expenses: 0,
+          generalExpenses: 0,
           priceUpdates: 0,
         },
       };
@@ -365,6 +408,24 @@ export class CalendarService {
     for (const row of priceRows) {
       const key = toDateKey(row.effectiveDate);
       ensureDate(key).markers.priceUpdates += 1;
+    }
+
+    // General expenses markers — scoped per owner
+    if (user.role === Role.ADMIN || user.role === Role.OWNER) {
+      const generalExpenseRows = await this.prisma.generalExpense.groupBy({
+        by: ['date'],
+        where: {
+          deletedAt: null,
+          date: { gte: range.startDate, lte: range.endDate },
+          ...(user.role === Role.OWNER ? { ownerId: user.id } : {}),
+        },
+        _count: { _all: true },
+      });
+
+      for (const row of generalExpenseRows) {
+        const key = toDateKey(row.date);
+        ensureDate(key).markers.generalExpenses += row._count._all;
+      }
     }
 
     return [...markerMap.values()].sort((a, b) => a.date.localeCompare(b.date));

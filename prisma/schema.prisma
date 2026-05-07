@@ -384,3 +384,43 @@ model AuditLog {
   @@index([actorUserId, createdAt])
   @@index([coopId, createdAt])
 }
+
+model GeneralExpenseCategory {
+  id           String           @id @db.Uuid
+  ownerId      String           @db.Uuid
+  name         String
+  isActive     Boolean          @default(true)
+  createdById  String?          @db.Uuid
+  updatedById  String?          @db.Uuid
+  deletedAt    DateTime?
+  deletedById  String?          @db.Uuid
+  deleteReason String?
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime?
+  expenses     GeneralExpense[]
+
+  @@index([ownerId, isActive])
+  @@index([deletedAt])
+}
+
+model GeneralExpense {
+  id           String                  @id @db.Uuid
+  ownerId      String                  @db.Uuid
+  date         DateTime                @db.Date
+  amount       BigInt                  @db.BigInt
+  description  String
+  categoryId   String?                 @db.Uuid
+  notes        String?
+  createdById  String                  @db.Uuid
+  updatedById  String?                 @db.Uuid
+  deletedAt    DateTime?
+  deletedById  String?                 @db.Uuid
+  deleteReason String?
+  createdAt    DateTime                @default(now())
+  updatedAt    DateTime?
+  category     GeneralExpenseCategory? @relation(fields: [categoryId], references: [id])
+
+  @@index([ownerId, date])
+  @@index([categoryId])
+  @@index([deletedAt])
+}

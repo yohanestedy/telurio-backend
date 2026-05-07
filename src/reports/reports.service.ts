@@ -213,6 +213,27 @@ export class ReportsService {
       };
     });
 
+    // Fetch general expenses (non-coop) for informational display
+    const generalExpenseRows = await this.prisma.generalExpense.findMany({
+      where: {
+        deletedAt: null,
+        date: { gte: period.startDate, lte: period.endDate },
+      },
+      select: {
+        id: true,
+        date: true,
+        description: true,
+        amount: true,
+        category: { select: { name: true } },
+      },
+      orderBy: { date: 'asc' },
+    });
+
+    const generalExpensesTotal = generalExpenseRows.reduce(
+      (sum, row) => sum + row.amount,
+      BigInt(0),
+    );
+
     return {
       ownerId: owner.id,
       ownerName: owner.name,
@@ -220,6 +241,17 @@ export class ReportsService {
       year: period.year,
       coops,
       totalOwnerShare,
+      generalExpenses: {
+        total: generalExpensesTotal,
+        count: generalExpenseRows.length,
+        items: generalExpenseRows.map((row) => ({
+          id: row.id,
+          date: row.date,
+          description: row.description,
+          amount: row.amount,
+          categoryName: row.category?.name ?? null,
+        })),
+      },
     };
   }
 

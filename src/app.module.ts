@@ -19,6 +19,8 @@ import { CalendarModule } from './calendar';
 import { AuditLogsModule } from './audit-logs';
 import { PublicPricesModule } from './public-prices';
 import { StocksModule } from './stocks';
+import { GeneralExpensesModule } from './general-expenses';
+import { GeneralExpenseCategoriesModule } from './general-expense-categories';
 import { AllExceptionsFilter } from './common/filters';
 import {
   BigIntSerializerInterceptor,
@@ -46,6 +48,8 @@ import {
     AuditLogsModule,
     PublicPricesModule,
     StocksModule,
+    GeneralExpensesModule,
+    GeneralExpenseCategoriesModule,
   ],
   providers: [
     { provide: APP_FILTER, useClass: AllExceptionsFilter },
