@@ -13,6 +13,7 @@ import {
   CreateExpenseDto,
   DeleteExpenseDto,
   QueryExpensesDto,
+  QueryExpenseSummaryDto,
   UpdateExpenseDto,
 } from './dto';
 
@@ -337,6 +338,89 @@ export class ExpensesService {
     if (!ownerCoopIds.includes(coopId)) {
       throw new ForbiddenException('Expense coop is outside owner scope');
     }
+  }
+
+  async getSummary(user: AuthUser, query: QueryExpenseSummaryDto) {
+    const ownerCoopIds = await this.getOwnerCoopIds(user);
+
+    // Resolve date range: custom range > month/year > current month
+    let startDate: Date;
+    let endDate: Date;
+
+    if (query.startDate && query.endDate) {
+      startDate = new Date(query.startDate);
+      endDate = new Date(query.endDate);
+    } else {
+      const now = new Date();
+      const month = query.month ?? now.getMonth() + 1;
+      const year = query.year ?? now.getFullYear();
+      startDate = new Date(`${year}-${String(month).padStart(2, '0')}-01`);
+      endDate = new Date(startDate);
+      endDate.setMonth(endDate.getMonth() + 1);
+      endDate.setDate(endDate.getDate() - 1);
+    }
+
+    const where: Prisma.ExpenseWhereInput = {
+      deletedAt: null,
+      date: { gte: startDate, lte: endDate },
+      ...(query.coopId ? { coopId: query.coopId } : {}),
+      ...(user.role === Role.ADMIN ? {} : { coopId: { in: ownerCoopIds } }),
+    };
+
+    const rows = await this.prisma.expense.findMany({
+      where,
+      select: {
+        amount: true,
+        expenseCategoryId: true,
+        expenseCategory: { select: { name: true } },
+      },
+    });
+
+    // Group by category
+    const categoryMap = new Map<
+      string,
+      {
+        categoryId: string | null;
+        categoryName: string;
+        total: bigint;
+        count: number;
+      }
+    >();
+
+    let grandTotal = BigInt(0);
+
+    for (const row of rows) {
+      const key = row.expenseCategoryId ?? '__uncategorized__';
+      const name = row.expenseCategory?.name ?? 'Tanpa Kategori';
+      const existing = categoryMap.get(key);
+      if (existing) {
+        existing.total += row.amount;
+        existing.count += 1;
+      } else {
+        categoryMap.set(key, {
+          categoryId: row.expenseCategoryId,
+          categoryName: name,
+          total: row.amount,
+          count: 1,
+        });
+      }
+      grandTotal += row.amount;
+    }
+
+    return {
+      startDate,
+      endDate,
+      totalAmount: grandTotal,
+      totalCount: rows.length,
+      categories: [...categoryMap.values()]
+        .sort((a, b) => Number(b.total - a.total))
+        .map((c) => ({
+          categoryId: c.categoryId,
+          categoryName: c.categoryName,
+          totalAmount: c.total,
+          count: c.count,
+        })),
+    };
   }
 
   private async getOwnerCoopIds(user: AuthUser): Promise<string[]> {

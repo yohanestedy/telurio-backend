@@ -5,3 +5,4 @@ export {
   QueryGeneralExpensesDto,
   generalExpenseSortFields,
 } from './query-general-expenses.dto';
+export { QueryGeneralExpenseSummaryDto } from './query-general-expense-summary.dto';

@@ -11,6 +11,7 @@ import {
   CreateGeneralExpenseDto,
   DeleteGeneralExpenseDto,
   QueryGeneralExpensesDto,
+  QueryGeneralExpenseSummaryDto,
   UpdateGeneralExpenseDto,
 } from './dto';
 
@@ -235,6 +236,92 @@ export class GeneralExpensesService {
     });
 
     return { success: true };
+  }
+
+  async getSummary(user: AuthUser, query: QueryGeneralExpenseSummaryDto) {
+    // Resolve date range
+    let startDate: Date;
+    let endDate: Date;
+
+    if (query.startDate && query.endDate) {
+      startDate = new Date(query.startDate);
+      endDate = new Date(query.endDate);
+    } else {
+      const now = new Date();
+      const month = query.month ?? now.getMonth() + 1;
+      const year = query.year ?? now.getFullYear();
+      startDate = new Date(`${year}-${String(month).padStart(2, '0')}-01`);
+      endDate = new Date(startDate);
+      endDate.setMonth(endDate.getMonth() + 1);
+      endDate.setDate(endDate.getDate() - 1);
+    }
+
+    const ownerScope: Prisma.GeneralExpenseWhereInput =
+      user.role === Role.ADMIN
+        ? query.ownerId
+          ? { ownerId: query.ownerId }
+          : {}
+        : { ownerId: user.id };
+
+    const where: Prisma.GeneralExpenseWhereInput = {
+      deletedAt: null,
+      date: { gte: startDate, lte: endDate },
+      ...ownerScope,
+    };
+
+    const rows = await this.prisma.generalExpense.findMany({
+      where,
+      select: {
+        amount: true,
+        categoryId: true,
+        category: { select: { name: true } },
+      },
+    });
+
+    const categoryMap = new Map<
+      string,
+      {
+        categoryId: string | null;
+        categoryName: string;
+        total: bigint;
+        count: number;
+      }
+    >();
+
+    let grandTotal = BigInt(0);
+
+    for (const row of rows) {
+      const key = row.categoryId ?? '__uncategorized__';
+      const name = row.category?.name ?? 'Tanpa Kategori';
+      const existing = categoryMap.get(key);
+      if (existing) {
+        existing.total += row.amount;
+        existing.count += 1;
+      } else {
+        categoryMap.set(key, {
+          categoryId: row.categoryId,
+          categoryName: name,
+          total: row.amount,
+          count: 1,
+        });
+      }
+      grandTotal += row.amount;
+    }
+
+    return {
+      startDate,
+      endDate,
+      totalAmount: grandTotal,
+      totalCount: rows.length,
+      categories: [...categoryMap.values()]
+        .sort((a, b) => Number(b.total - a.total))
+        .map((c) => ({
+          categoryId: c.categoryId,
+          categoryName: c.categoryName,
+          totalAmount: c.total,
+          count: c.count,
+        })),
+    };
   }
 
   // --- Helpers ---

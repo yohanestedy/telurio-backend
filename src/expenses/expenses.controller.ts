@@ -15,6 +15,7 @@ import {
   CreateExpenseDto,
   DeleteExpenseDto,
   QueryExpensesDto,
+  QueryExpenseSummaryDto,
   UpdateExpenseDto,
 } from './dto';
 import { ExpensesService } from './expenses.service';
@@ -30,6 +31,15 @@ export class ExpensesController {
     @Query() query: QueryExpensesDto,
   ) {
     return await this.service.listExpenses(user, query);
+  }
+
+  @Get('summary')
+  @Roles(Role.ADMIN, Role.OWNER)
+  async summary(
+    @CurrentUser() user: { id: string; role: Role },
+    @Query() query: QueryExpenseSummaryDto,
+  ) {
+    return await this.service.getSummary(user, query);
   }
 
   @Post()
