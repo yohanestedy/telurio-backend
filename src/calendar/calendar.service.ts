@@ -57,12 +57,18 @@ export interface CalendarItem {
       coopId: string;
       coopName: string;
       totalAmount: bigint;
+      items: Array<{
+        description: string | null;
+        amount: bigint;
+        categoryName: string | null;
+      }>;
     }>;
     generalExpenses: Array<{
       id: string;
       description: string;
       amount: bigint;
       categoryName: string | null;
+      ownerName: string | null;
     }>;
     priceUpdates: Array<{
       pricePerKg: bigint;
@@ -219,31 +225,46 @@ export class CalendarService {
       });
     }
 
-    const expenseRows = await this.prisma.expense.groupBy({
-      by: ['date', 'coopId'],
+    const expenseRows = await this.prisma.expense.findMany({
       where: {
         deletedAt: null,
         date: { gte: range.startDate, lte: range.endDate },
         ...(user.role === Role.ADMIN ? {} : { coopId: { in: scopedCoopIds } }),
       },
-      _sum: {
+      orderBy: { date: 'asc' },
+      select: {
+        date: true,
+        coopId: true,
         amount: true,
-      },
-      orderBy: {
-        date: 'asc',
+        description: true,
+        expenseCategory: { select: { name: true } },
       },
     });
 
-    const expenseCoopNames = await this.getCoopNames(
-      expenseRows.map((row) => row.coopId),
-    );
+    const expenseCoopIds = [...new Set(expenseRows.map((r) => r.coopId))];
+    const expenseCoopNames = await this.getCoopNames(expenseCoopIds);
 
+    // Group by date + coopId
+    const expenseGroupMap = new Map<string, { coopId: string; total: bigint; items: Array<{ description: string | null; amount: bigint; categoryName: string | null }> }>();
     for (const row of expenseRows) {
-      const key = dayjs(row.date).format('YYYY-MM-DD');
-      ensureDate(key).events.expenses.push({
-        coopId: row.coopId,
-        coopName: expenseCoopNames.get(row.coopId) ?? '-',
-        totalAmount: row._sum.amount ?? BigInt(0),
+      const key = `${dayjs(row.date).format('YYYY-MM-DD')}|${row.coopId}`;
+      const existing = expenseGroupMap.get(key);
+      const item = { description: row.description, amount: row.amount, categoryName: row.expenseCategory?.name ?? null };
+      if (existing) {
+        existing.total += row.amount;
+        existing.items.push(item);
+      } else {
+        expenseGroupMap.set(key, { coopId: row.coopId, total: row.amount, items: [item] });
+      }
+    }
+
+    for (const [compositeKey, group] of expenseGroupMap) {
+      const [dateKey] = compositeKey.split('|');
+      ensureDate(dateKey).events.expenses.push({
+        coopId: group.coopId,
+        coopName: expenseCoopNames.get(group.coopId) ?? '-',
+        totalAmount: group.total,
+        items: group.items,
       });
     }
 
@@ -282,12 +303,21 @@ export class CalendarService {
         orderBy: { date: 'asc' },
         select: {
           id: true,
+          ownerId: true,
           date: true,
           description: true,
           amount: true,
           category: { select: { name: true } },
         },
       });
+
+      // Resolve owner names
+      const ownerIds = [...new Set(generalExpenseRows.map((r) => r.ownerId))];
+      const owners = await this.prisma.user.findMany({
+        where: { id: { in: ownerIds } },
+        select: { id: true, name: true },
+      });
+      const ownerMap = new Map(owners.map((o) => [o.id, o.name]));
 
       for (const row of generalExpenseRows) {
         const key = dayjs(row.date).format('YYYY-MM-DD');
@@ -296,6 +326,7 @@ export class CalendarService {
           description: row.description,
           amount: row.amount,
           categoryName: row.category?.name ?? null,
+          ownerName: ownerMap.get(row.ownerId) ?? null,
         });
       }
     }

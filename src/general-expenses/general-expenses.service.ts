@@ -73,24 +73,30 @@ export class GeneralExpensesService {
       }),
     ]);
 
-    const creatorIds = [...new Set(rows.map((r) => r.createdById))];
-    const creators = await this.prisma.user.findMany({
-      where: { id: { in: creatorIds } },
+    const userIds = [
+      ...new Set([
+        ...rows.map((r) => r.createdById),
+        ...rows.map((r) => r.ownerId),
+      ]),
+    ];
+    const users = await this.prisma.user.findMany({
+      where: { id: { in: userIds } },
       select: { id: true, name: true },
     });
-    const creatorMap = new Map(creators.map((c) => [c.id, c.name]));
+    const userMap = new Map(users.map((u) => [u.id, u.name]));
 
     return {
       data: rows.map((item) => ({
         id: item.id,
         ownerId: item.ownerId,
+        ownerName: userMap.get(item.ownerId) ?? null,
         date: item.date,
         amount: item.amount,
         description: item.description,
         categoryId: item.categoryId,
         categoryName: item.category?.name ?? null,
         notes: item.notes,
-        createdByName: creatorMap.get(item.createdById) ?? null,
+        createdByName: userMap.get(item.createdById) ?? null,
         createdAt: item.createdAt,
       })),
       meta: buildPaginationMeta({
