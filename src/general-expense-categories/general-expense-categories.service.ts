@@ -161,9 +161,7 @@ export class GeneralExpenseCategoriesService {
     }
 
     if (category.ownerId !== user.id) {
-      throw new ForbiddenException(
-        'Only owner of category can delete it',
-      );
+      throw new ForbiddenException('Only owner of category can delete it');
     }
 
     // Soft delete

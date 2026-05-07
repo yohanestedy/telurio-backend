@@ -245,16 +245,35 @@ export class CalendarService {
     const expenseCoopNames = await this.getCoopNames(expenseCoopIds);
 
     // Group by date + coopId
-    const expenseGroupMap = new Map<string, { coopId: string; total: bigint; items: Array<{ description: string | null; amount: bigint; categoryName: string | null }> }>();
+    const expenseGroupMap = new Map<
+      string,
+      {
+        coopId: string;
+        total: bigint;
+        items: Array<{
+          description: string | null;
+          amount: bigint;
+          categoryName: string | null;
+        }>;
+      }
+    >();
     for (const row of expenseRows) {
       const key = `${dayjs(row.date).format('YYYY-MM-DD')}|${row.coopId}`;
       const existing = expenseGroupMap.get(key);
-      const item = { description: row.description, amount: row.amount, categoryName: row.expenseCategory?.name ?? null };
+      const item = {
+        description: row.description,
+        amount: row.amount,
+        categoryName: row.expenseCategory?.name ?? null,
+      };
       if (existing) {
         existing.total += row.amount;
         existing.items.push(item);
       } else {
-        expenseGroupMap.set(key, { coopId: row.coopId, total: row.amount, items: [item] });
+        expenseGroupMap.set(key, {
+          coopId: row.coopId,
+          total: row.amount,
+          items: [item],
+        });
       }
     }
 
