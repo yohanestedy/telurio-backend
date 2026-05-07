@@ -139,4 +139,39 @@ export class ExpenseCategoriesService {
       ownerName: updated.owner.name,
     };
   }
+
+  async deleteCategory(categoryId: string, user: AuthUser) {
+    if (user.role !== Role.OWNER) {
+      throw new ForbiddenException('Only OWNER can delete expense categories');
+    }
+
+    const category = await this.prisma.expenseCategory.findFirst({
+      where: { id: categoryId, deletedAt: null },
+    });
+
+    if (!category) {
+      throw new NotFoundException('Expense category not found');
+    }
+
+    if (category.ownerId !== user.id) {
+      throw new ForbiddenException('Only owner of category can delete it');
+    }
+
+    // Soft delete — expenses using this category keep their data (categoryId becomes orphaned but nullable)
+    await this.prisma.expenseCategory.update({
+      where: { id: categoryId },
+      data: {
+        deletedAt: new Date(),
+        deletedById: user.id,
+      },
+    });
+
+    // Nullify category reference in expenses
+    await this.prisma.expense.updateMany({
+      where: { expenseCategoryId: categoryId },
+      data: { expenseCategoryId: null },
+    });
+
+    return { success: true };
+  }
 }

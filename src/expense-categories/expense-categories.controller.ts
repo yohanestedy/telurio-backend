@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Param,
   ParseUUIDPipe,
@@ -39,5 +40,14 @@ export class ExpenseCategoriesController {
     @Body() dto: UpdateExpenseCategoryDto,
   ) {
     return await this.service.updateCategory(id, user, dto);
+  }
+
+  @Delete(':id')
+  @Roles(Role.OWNER)
+  async remove(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() user: { id: string; role: Role },
+  ) {
+    return await this.service.deleteCategory(id, user);
   }
 }

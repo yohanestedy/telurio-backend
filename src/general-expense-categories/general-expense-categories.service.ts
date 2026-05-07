@@ -30,10 +30,21 @@ export class GeneralExpenseCategoriesService {
       orderBy: [{ ownerId: 'asc' }, { name: 'asc' }],
     });
 
+    // Resolve owner names for ADMIN
+    const ownerIds = [...new Set(rows.map((r) => r.ownerId))];
+    const owners = ownerIds.length
+      ? await this.prisma.user.findMany({
+          where: { id: { in: ownerIds } },
+          select: { id: true, name: true },
+        })
+      : [];
+    const ownerMap = new Map(owners.map((o) => [o.id, o.name]));
+
     return rows.map((row) => ({
       id: row.id,
       name: row.name,
       isActive: row.isActive,
+      ownerName: ownerMap.get(row.ownerId) ?? null,
       createdAt: row.createdAt,
     }));
   }
@@ -132,5 +143,44 @@ export class GeneralExpenseCategoriesService {
       isActive: updated.isActive,
       createdAt: updated.createdAt,
     };
+  }
+
+  async deleteCategory(categoryId: string, user: AuthUser) {
+    if (user.role !== Role.OWNER) {
+      throw new ForbiddenException(
+        'Only OWNER can delete general expense categories',
+      );
+    }
+
+    const category = await this.prisma.generalExpenseCategory.findFirst({
+      where: { id: categoryId, deletedAt: null },
+    });
+
+    if (!category) {
+      throw new NotFoundException('General expense category not found');
+    }
+
+    if (category.ownerId !== user.id) {
+      throw new ForbiddenException(
+        'Only owner of category can delete it',
+      );
+    }
+
+    // Soft delete
+    await this.prisma.generalExpenseCategory.update({
+      where: { id: categoryId },
+      data: {
+        deletedAt: new Date(),
+        deletedById: user.id,
+      },
+    });
+
+    // Nullify category reference in general expenses
+    await this.prisma.generalExpense.updateMany({
+      where: { categoryId },
+      data: { categoryId: null },
+    });
+
+    return { success: true };
   }
 }
