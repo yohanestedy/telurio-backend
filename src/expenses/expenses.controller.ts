@@ -14,6 +14,7 @@ import { CurrentUser, Roles } from '../common';
 import {
   CreateExpenseDto,
   DeleteExpenseDto,
+  QueryExpenseDashboardDto,
   QueryExpensesDto,
   QueryExpenseSummaryDto,
   UpdateExpenseDto,
@@ -40,6 +41,15 @@ export class ExpensesController {
     @Query() query: QueryExpenseSummaryDto,
   ) {
     return await this.service.getSummary(user, query);
+  }
+
+  @Get('dashboard')
+  @Roles(Role.ADMIN, Role.OWNER)
+  async dashboard(
+    @CurrentUser() user: { id: string; role: Role },
+    @Query() query: QueryExpenseDashboardDto,
+  ) {
+    return await this.service.getDashboardOverview(user, query);
   }
 
   @Post()

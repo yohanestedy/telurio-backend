@@ -12,6 +12,7 @@ import {
 import {
   CreateExpenseDto,
   DeleteExpenseDto,
+  QueryExpenseDashboardDto,
   QueryExpensesDto,
   QueryExpenseSummaryDto,
   UpdateExpenseDto,
@@ -420,6 +421,190 @@ export class ExpensesService {
           totalAmount: c.total,
           count: c.count,
         })),
+    };
+  }
+
+  async getDashboardOverview(user: AuthUser, query: QueryExpenseDashboardDto) {
+    const ownerCoopIds = await this.getOwnerCoopIds(user);
+
+    // Resolve current period
+    const now = new Date();
+    const month = query.month ?? now.getMonth() + 1;
+    const year = query.year ?? now.getFullYear();
+    const startDate = new Date(`${year}-${String(month).padStart(2, '0')}-01`);
+    const endDate = new Date(startDate);
+    endDate.setMonth(endDate.getMonth() + 1);
+    endDate.setDate(endDate.getDate() - 1);
+
+    // Previous period (same duration, previous month)
+    const prevStartDate = new Date(startDate);
+    prevStartDate.setMonth(prevStartDate.getMonth() - 1);
+    const prevEndDate = new Date(prevStartDate);
+    prevEndDate.setMonth(prevEndDate.getMonth() + 1);
+    prevEndDate.setDate(prevEndDate.getDate() - 1);
+
+    // --- Coop Expenses ---
+    // Resolve coop scope: specific coop > owner's coops > all (admin) / own coops (owner)
+    let coopScope: Prisma.ExpenseWhereInput = {};
+    if (query.coopId) {
+      coopScope = { coopId: query.coopId };
+    } else if (user.role === Role.ADMIN && query.ownerId) {
+      // ADMIN filtering by owner: resolve that owner's coops
+      const ownerAccesses = await this.prisma.userCoopAccess.findMany({
+        where: {
+          userId: query.ownerId,
+          deletedAt: null,
+          coop: { deletedAt: null },
+        },
+        select: { coopId: true },
+      });
+      const ownerCoopIdList = ownerAccesses.map((a) => a.coopId);
+      coopScope = { coopId: { in: ownerCoopIdList } };
+    } else if (user.role !== Role.ADMIN) {
+      coopScope = { coopId: { in: ownerCoopIds } };
+    }
+
+    const coopWhere: Prisma.ExpenseWhereInput = {
+      deletedAt: null,
+      date: { gte: startDate, lte: endDate },
+      ...coopScope,
+    };
+
+    const coopRows = await this.prisma.expense.findMany({
+      where: coopWhere,
+      select: {
+        amount: true,
+        expenseCategoryId: true,
+        expenseCategory: { select: { name: true } },
+      },
+    });
+
+    const coopPrevRows = await this.prisma.expense.findMany({
+      where: { ...coopWhere, date: { gte: prevStartDate, lte: prevEndDate } },
+      select: { amount: true },
+    });
+
+    // --- General Expenses ---
+    const generalWhere: Prisma.GeneralExpenseWhereInput = {
+      deletedAt: null,
+      date: { gte: startDate, lte: endDate },
+      ...(user.role === Role.ADMIN
+        ? query.ownerId
+          ? { ownerId: query.ownerId }
+          : {}
+        : { ownerId: user.id }),
+    };
+
+    const generalRows = await this.prisma.generalExpense.findMany({
+      where: generalWhere,
+      select: {
+        amount: true,
+        categoryId: true,
+        category: { select: { name: true } },
+      },
+    });
+
+    const generalPrevRows = await this.prisma.generalExpense.findMany({
+      where: {
+        ...generalWhere,
+        date: { gte: prevStartDate, lte: prevEndDate },
+      },
+      select: { amount: true },
+    });
+
+    // --- Aggregate ---
+    let coopTotal = BigInt(0);
+    let generalTotal = BigInt(0);
+    let coopPrevTotal = BigInt(0);
+    let generalPrevTotal = BigInt(0);
+
+    const coopCategoryMap = new Map<
+      string,
+      { name: string; total: bigint; count: number }
+    >();
+    const generalCategoryMap = new Map<
+      string,
+      { name: string; total: bigint; count: number }
+    >();
+
+    for (const row of coopRows) {
+      coopTotal += row.amount;
+      const key = row.expenseCategoryId ?? '__uncategorized__';
+      const name = row.expenseCategory?.name ?? 'Tanpa Kategori';
+      const existing = coopCategoryMap.get(key);
+      if (existing) {
+        existing.total += row.amount;
+        existing.count += 1;
+      } else {
+        coopCategoryMap.set(key, { name, total: row.amount, count: 1 });
+      }
+    }
+
+    for (const row of generalRows) {
+      generalTotal += row.amount;
+      const key = row.categoryId ?? '__uncategorized__';
+      const name = row.category?.name ?? 'Tanpa Kategori';
+      const existing = generalCategoryMap.get(key);
+      if (existing) {
+        existing.total += row.amount;
+        existing.count += 1;
+      } else {
+        generalCategoryMap.set(key, { name, total: row.amount, count: 1 });
+      }
+    }
+
+    for (const row of coopPrevRows) coopPrevTotal += row.amount;
+    for (const row of generalPrevRows) generalPrevTotal += row.amount;
+
+    const grandTotal = coopTotal + generalTotal;
+    const prevGrandTotal = coopPrevTotal + generalPrevTotal;
+
+    function calcChange(current: bigint, previous: bigint) {
+      if (previous === BigInt(0)) {
+        return {
+          percentage: current > BigInt(0) ? 100 : 0,
+          direction: current > BigInt(0) ? ('up' as const) : ('flat' as const),
+        };
+      }
+      const diff = Number(current - previous);
+      const pct = Math.round((diff / Number(previous)) * 100);
+      return {
+        percentage: Math.abs(pct),
+        direction:
+          pct > 0
+            ? ('up' as const)
+            : pct < 0
+              ? ('down' as const)
+              : ('flat' as const),
+      };
+    }
+
+    return {
+      month,
+      year,
+      total: {
+        amount: grandTotal,
+        count: coopRows.length + generalRows.length,
+        change: calcChange(grandTotal, prevGrandTotal),
+      },
+      coop: {
+        amount: coopTotal,
+        count: coopRows.length,
+        change: calcChange(coopTotal, coopPrevTotal),
+        topCategories: [...coopCategoryMap.values()]
+          .sort((a, b) => Number(b.total - a.total))
+          .slice(0, 5)
+          .map((c) => ({ name: c.name, amount: c.total, count: c.count })),
+      },
+      general: {
+        amount: generalTotal,
+        count: generalRows.length,
+        change: calcChange(generalTotal, generalPrevTotal),
+        topCategories: [...generalCategoryMap.values()]
+          .sort((a, b) => Number(b.total - a.total))
+          .slice(0, 5)
+          .map((c) => ({ name: c.name, amount: c.total, count: c.count })),
+      },
     };
   }
 
