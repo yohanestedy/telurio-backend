@@ -46,6 +46,10 @@ export interface CalendarItem {
       totalInvoice: bigint | null;
       deliveryStatus: DeliveryStatus;
       paymentStatus: string;
+      allocations: Array<{
+        coopName: string;
+        quantityKg: Prisma.Decimal;
+      }>;
     }>;
     productions: Array<{
       coopId: string;
@@ -177,6 +181,12 @@ export class CalendarService {
         deliveryStatus: true,
         paymentStatus: true,
         customer: { select: { name: true } },
+        allocations: {
+          select: {
+            quantityKg: true,
+            coop: { select: { name: true } },
+          },
+        },
       },
     });
 
@@ -190,6 +200,10 @@ export class CalendarService {
         totalInvoice: order.totalInvoice,
         deliveryStatus: order.deliveryStatus,
         paymentStatus: order.paymentStatus,
+        allocations: order.allocations.map((a) => ({
+          coopName: a.coop.name,
+          quantityKg: a.quantityKg,
+        })),
       });
     }
 
