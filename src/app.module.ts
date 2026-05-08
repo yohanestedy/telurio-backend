@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { APP_FILTER, APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
+import { ScheduleModule } from '@nestjs/schedule';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { PrismaModule } from './prisma';
 import { AuthModule, JwtAuthGuard, RolesGuard } from './auth';
@@ -30,6 +31,7 @@ import {
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
+    ScheduleModule.forRoot(),
     ThrottlerModule.forRoot([{ ttl: 60000, limit: 30 }]),
     PrismaModule,
     AuthModule,

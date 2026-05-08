@@ -1,10 +1,6 @@
-import {
-  Injectable,
-  Logger,
-  OnModuleDestroy,
-  OnModuleInit,
-} from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { Cron } from '@nestjs/schedule';
 import { DeliveryStatus, OrderLifecycleStatus } from '@prisma/client';
 import { getTodayDateOnlyUtc, toDateKey } from '../common';
 import { PrismaService } from '../prisma';
@@ -30,10 +26,9 @@ interface OrderCreatedNotificationPayload {
 }
 
 @Injectable()
-export class NotificationsService implements OnModuleInit, OnModuleDestroy {
+export class NotificationsService {
   private readonly logger = new Logger(NotificationsService.name);
   private readonly sentReminderKeys = new Set<string>();
-  private reminderTimer: NodeJS.Timeout | null = null;
 
   constructor(
     private readonly configService: ConfigService,
@@ -41,17 +36,48 @@ export class NotificationsService implements OnModuleInit, OnModuleDestroy {
     private readonly fonnteClient: FonnteClient,
   ) {}
 
-  onModuleInit() {
-    this.reminderTimer = setInterval(() => {
-      void this.runScheduledOrderReminder();
-    }, 60_000);
+  @Cron('0 17,19 * * *', { timeZone: 'Asia/Jakarta' })
+  async runScheduledOrderReminder() {
+    if (!this.isOrderReminderSchedulerEnabled()) {
+      return;
+    }
+
+    if (!this.isWhatsAppEnabled()) {
+      return;
+    }
+
+    const now = this.getJakartaDateTimeParts();
+    const reminderKey = `${now.dateKey}-${now.time}`;
+    if (this.sentReminderKeys.has(reminderKey)) {
+      return;
+    }
+    this.sentReminderKeys.add(reminderKey);
+
+    const target = this.configService.get<string>('FONNTE_GROUP_FAMILY_ID');
+    if (!target) {
+      this.logger.warn(
+        'FONNTE_GROUP_FAMILY_ID is not configured; order reminder skipped',
+      );
+      return;
+    }
+
+    const message = await this.buildTodayDeliveryReminderMessage(now.dateKey);
+    if (!message) {
+      return;
+    }
+
+    await this.sendMessage(target, message, 'today-delivery-reminder');
   }
 
-  onModuleDestroy() {
-    if (this.reminderTimer) {
-      clearInterval(this.reminderTimer);
-      this.reminderTimer = null;
-    }
+  private isWhatsAppEnabled() {
+    return this.configService.get<string>('FONNTE_ENABLED') !== 'false';
+  }
+
+  private isOrderReminderSchedulerEnabled() {
+    return (
+      this.configService.get<string>('ORDER_REMINDER_SCHEDULER_ENABLED') ===
+      'true'
+    );
   }
 
   async notifyOrderCreated(order: OrderCreatedNotificationPayload) {
@@ -84,10 +110,6 @@ export class NotificationsService implements OnModuleInit, OnModuleDestroy {
     }
   }
 
-  private isWhatsAppEnabled() {
-    return this.configService.get<string>('FONNTE_ENABLED') !== 'false';
-  }
-
   private buildOrderCreatedMessage(order: OrderCreatedNotificationPayload) {
     const priceLabel = order.pricePerKg
       ? this.formatRupiah(order.pricePerKg)
@@ -95,7 +117,6 @@ export class NotificationsService implements OnModuleInit, OnModuleDestroy {
     const invoiceLabel = order.totalInvoice
       ? this.formatRupiah(order.totalInvoice)
       : 'Belum dihitung';
-    const customerPhone = order.customer.phone ?? '-';
     const notes = order.notes?.trim() ? order.notes.trim() : '-';
     const paymentLines = [
       `Pembayaran: ${this.paymentStatusLabel(order.paymentStatus)}`,
@@ -157,38 +178,6 @@ export class NotificationsService implements OnModuleInit, OnModuleDestroy {
       '',
       ...(lines.length ? lines : ['Belum ada pesanan untuk hari ini.']),
     ].join('\n');
-  }
-
-  private async runScheduledOrderReminder() {
-    if (!this.isWhatsAppEnabled()) {
-      return;
-    }
-
-    const now = this.getJakartaDateTimeParts();
-    if (!['17:00', '19:00'].includes(now.time)) {
-      return;
-    }
-
-    const reminderKey = `${now.dateKey}-${now.time}`;
-    if (this.sentReminderKeys.has(reminderKey)) {
-      return;
-    }
-    this.sentReminderKeys.add(reminderKey);
-
-    const target = this.configService.get<string>('FONNTE_GROUP_FAMILY_ID');
-    if (!target) {
-      this.logger.warn(
-        'FONNTE_GROUP_FAMILY_ID is not configured; order reminder skipped',
-      );
-      return;
-    }
-
-    const message = await this.buildTodayDeliveryReminderMessage(now.dateKey);
-    if (!message) {
-      return;
-    }
-
-    await this.sendMessage(target, message, 'today-delivery-reminder');
   }
 
   private async buildTodayDeliveryReminderMessage(dateKey: string) {
