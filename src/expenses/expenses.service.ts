@@ -131,36 +131,84 @@ export class ExpensesService {
     await this.validateCoopScopeForWrite(user, dto.coopId);
     await this.validateExpenseCategory(user, dto.expenseCategoryId ?? null);
 
-    const created = await this.prisma.expense.create({
-      data: {
-        id: generateUuidV7(),
-        date: new Date(dto.date),
-        coopId: dto.coopId,
-        expenseCategoryId: dto.expenseCategoryId ?? null,
-        // categoryLabel removed
-        description: dto.description ?? null,
-        amount: BigInt(dto.amount),
-        notes: dto.notes ?? null,
-        createdById: user.id,
-      },
-      include: {
-        coop: { select: { name: true } },
-      },
-    });
+    const idempotencyKey = this.normalizeIdempotencyKey(dto.idempotencyKey);
+    const include = {
+      coop: { select: { name: true } },
+    } satisfies Prisma.ExpenseInclude;
 
+    if (idempotencyKey) {
+      const existing = await this.prisma.expense.findFirst({
+        where: { createdById: user.id, idempotencyKey },
+        include,
+      });
+
+      if (existing) {
+        return this.formatExpense(existing);
+      }
+    }
+
+    try {
+      const created = await this.prisma.expense.create({
+        data: {
+          id: generateUuidV7(),
+          date: new Date(dto.date),
+          coopId: dto.coopId,
+          expenseCategoryId: dto.expenseCategoryId ?? null,
+          // categoryLabel removed
+          description: dto.description ?? null,
+          amount: BigInt(dto.amount),
+          idempotencyKey,
+          createdById: user.id,
+        },
+        include,
+      });
+
+      return this.formatExpense(created);
+    } catch (error) {
+      if (idempotencyKey && this.isUniqueConstraintError(error)) {
+        const existing = await this.prisma.expense.findFirst({
+          where: { createdById: user.id, idempotencyKey },
+          include,
+        });
+
+        if (existing) {
+          return this.formatExpense(existing);
+        }
+      }
+
+      throw error;
+    }
+  }
+
+  private formatExpense(
+    expense: Prisma.ExpenseGetPayload<{
+      include: { coop: { select: { name: true } } };
+    }>,
+  ) {
     return {
-      id: created.id,
-      date: created.date,
-      coopId: created.coopId,
-      coopName: created.coop.name,
-      // categoryLabel removed
-      expenseCategoryId: created.expenseCategoryId,
-      description: created.description,
-      amount: created.amount,
-      notes: created.notes,
+      id: expense.id,
+      date: expense.date,
+      coopId: expense.coopId,
+      coopName: expense.coop.name,
+      expenseCategoryId: expense.expenseCategoryId,
+      description: expense.description,
+      amount: expense.amount,
+      notes: expense.notes,
       createdByName: null,
-      createdAt: created.createdAt,
+      createdAt: expense.createdAt,
     };
+  }
+
+  private normalizeIdempotencyKey(value?: string) {
+    const normalized = value?.trim();
+    return normalized ? normalized : null;
+  }
+
+  private isUniqueConstraintError(error: unknown) {
+    return (
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      error.code === 'P2002'
+    );
   }
 
   async updateExpense(

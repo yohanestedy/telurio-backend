@@ -80,24 +80,52 @@ export class CustomersService {
   }
 
   async createCustomer(actor: AuthUserContext, dto: CreateCustomerDto) {
-    const created = await this.prisma.customer.create({
-      data: {
-        id: generateUuidV7(),
-        name: dto.name,
-        address: dto.address ?? null,
-        phone: dto.phone ?? null,
-        createdById: actor.id,
-      },
-      select: {
-        id: true,
-        name: true,
-        address: true,
-        phone: true,
-        createdAt: true,
-      },
-    });
+    const idempotencyKey = this.normalizeIdempotencyKey(dto.idempotencyKey);
+    const select = {
+      id: true,
+      name: true,
+      address: true,
+      phone: true,
+      createdAt: true,
+    } satisfies Prisma.CustomerSelect;
 
-    return created;
+    if (idempotencyKey) {
+      const existing = await this.prisma.customer.findFirst({
+        where: { createdById: actor.id, idempotencyKey },
+        select,
+      });
+
+      if (existing) {
+        return existing;
+      }
+    }
+
+    try {
+      return await this.prisma.customer.create({
+        data: {
+          id: generateUuidV7(),
+          name: dto.name,
+          address: dto.address ?? null,
+          phone: dto.phone ?? null,
+          idempotencyKey,
+          createdById: actor.id,
+        },
+        select,
+      });
+    } catch (error) {
+      if (idempotencyKey && this.isUniqueConstraintError(error)) {
+        const existing = await this.prisma.customer.findFirst({
+          where: { createdById: actor.id, idempotencyKey },
+          select,
+        });
+
+        if (existing) {
+          return existing;
+        }
+      }
+
+      throw error;
+    }
   }
 
   async updateCustomer(
@@ -152,5 +180,17 @@ export class CustomersService {
     });
 
     return updated;
+  }
+
+  private normalizeIdempotencyKey(value?: string) {
+    const normalized = value?.trim();
+    return normalized ? normalized : null;
+  }
+
+  private isUniqueConstraintError(error: unknown) {
+    return (
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      error.code === 'P2002'
+    );
   }
 }

@@ -34,4 +34,9 @@ export class CreateGeneralExpenseDto {
   @IsOptional()
   @IsUUID()
   ownerId?: string;
+
+  @IsOptional()
+  @IsString()
+  @Length(8, 120)
+  idempotencyKey?: string;
 }

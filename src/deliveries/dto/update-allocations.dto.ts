@@ -1,5 +1,10 @@
 import { Type } from 'class-transformer';
-import { ArrayMinSize, IsArray, ValidateNested } from 'class-validator';
+import {
+  ArrayMinSize,
+  IsArray,
+  IsISO8601,
+  ValidateNested,
+} from 'class-validator';
 import { AllocationItemDto } from './allocation-item.dto';
 
 export class UpdateAllocationsDto {
@@ -7,5 +12,8 @@ export class UpdateAllocationsDto {
   @ArrayMinSize(1)
   @ValidateNested({ each: true })
   @Type(() => AllocationItemDto)
-  allocations: AllocationItemDto[];
+  allocations!: AllocationItemDto[];
+
+  @IsISO8601()
+  orderUpdatedAt!: string;
 }

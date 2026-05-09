@@ -161,19 +161,21 @@ model UserCoopAccess {
 }
 
 model Customer {
-  id           String    @id @db.Uuid
-  name         String
-  address      String?
-  phone        String?
-  createdById  String?   @db.Uuid
-  updatedById  String?   @db.Uuid
-  deletedAt    DateTime?
-  deletedById  String?   @db.Uuid
-  deleteReason String?
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime?
-  orders       Order[]
+  id             String    @id @db.Uuid
+  name           String
+  address        String?
+  phone          String?
+  idempotencyKey String?
+  createdById    String?   @db.Uuid
+  updatedById    String?   @db.Uuid
+  deletedAt      DateTime?
+  deletedById    String?   @db.Uuid
+  deleteReason   String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime?
+  orders         Order[]
 
+  @@unique([createdById, idempotencyKey])
   @@index([name])
   @@index([phone])
   @@index([deletedAt])
@@ -328,20 +330,22 @@ model PaymentHistory {
 }
 
 model ExpenseCategory {
-  id           String    @id @db.Uuid
-  ownerId      String    @db.Uuid
-  name         String
-  isActive     Boolean   @default(true)
-  createdById  String?   @db.Uuid
-  updatedById  String?   @db.Uuid
-  deletedAt    DateTime?
-  deletedById  String?   @db.Uuid
-  deleteReason String?
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime?
-  owner        User      @relation(fields: [ownerId], references: [id])
-  expenses     Expense[]
+  id             String    @id @db.Uuid
+  ownerId        String    @db.Uuid
+  name           String
+  normalizedName String
+  isActive       Boolean   @default(true)
+  createdById    String?   @db.Uuid
+  updatedById    String?   @db.Uuid
+  deletedAt      DateTime?
+  deletedById    String?   @db.Uuid
+  deleteReason   String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime?
+  owner          User      @relation(fields: [ownerId], references: [id])
+  expenses       Expense[]
 
+  @@unique([ownerId, normalizedName])
   @@index([ownerId, isActive])
   @@index([deletedAt])
 }
@@ -354,6 +358,7 @@ model Expense {
   description       String?
   amount            BigInt           @db.BigInt
   notes             String?
+  idempotencyKey    String?
   createdById       String           @db.Uuid
   updatedById       String?          @db.Uuid
   deletedAt         DateTime?
@@ -364,6 +369,7 @@ model Expense {
   coop              Coop             @relation(fields: [coopId], references: [id])
   expenseCategory   ExpenseCategory? @relation(fields: [expenseCategoryId], references: [id])
 
+  @@unique([createdById, idempotencyKey])
   @@index([coopId, date])
   @@index([expenseCategoryId])
   @@index([deletedAt])
@@ -389,40 +395,44 @@ model AuditLog {
 }
 
 model GeneralExpenseCategory {
-  id           String           @id @db.Uuid
-  ownerId      String           @db.Uuid
-  name         String
-  isActive     Boolean          @default(true)
-  createdById  String?          @db.Uuid
-  updatedById  String?          @db.Uuid
-  deletedAt    DateTime?
-  deletedById  String?          @db.Uuid
-  deleteReason String?
-  createdAt    DateTime         @default(now())
-  updatedAt    DateTime?
-  expenses     GeneralExpense[]
+  id             String           @id @db.Uuid
+  ownerId        String           @db.Uuid
+  name           String
+  normalizedName String
+  isActive       Boolean          @default(true)
+  createdById    String?          @db.Uuid
+  updatedById    String?          @db.Uuid
+  deletedAt      DateTime?
+  deletedById    String?          @db.Uuid
+  deleteReason   String?
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime?
+  expenses       GeneralExpense[]
 
+  @@unique([ownerId, normalizedName])
   @@index([ownerId, isActive])
   @@index([deletedAt])
 }
 
 model GeneralExpense {
-  id           String                  @id @db.Uuid
-  ownerId      String                  @db.Uuid
-  date         DateTime                @db.Date
-  amount       BigInt                  @db.BigInt
-  description  String
-  categoryId   String?                 @db.Uuid
-  notes        String?
-  createdById  String                  @db.Uuid
-  updatedById  String?                 @db.Uuid
-  deletedAt    DateTime?
-  deletedById  String?                 @db.Uuid
-  deleteReason String?
-  createdAt    DateTime                @default(now())
-  updatedAt    DateTime?
-  category     GeneralExpenseCategory? @relation(fields: [categoryId], references: [id])
+  id             String                  @id @db.Uuid
+  ownerId        String                  @db.Uuid
+  date           DateTime                @db.Date
+  amount         BigInt                  @db.BigInt
+  description    String
+  categoryId     String?                 @db.Uuid
+  notes          String?
+  idempotencyKey String?
+  createdById    String                  @db.Uuid
+  updatedById    String?                 @db.Uuid
+  deletedAt      DateTime?
+  deletedById    String?                 @db.Uuid
+  deleteReason   String?
+  createdAt      DateTime                @default(now())
+  updatedAt      DateTime?
+  category       GeneralExpenseCategory? @relation(fields: [categoryId], references: [id])
 
+  @@unique([createdById, idempotencyKey])
   @@index([ownerId, date])
   @@index([categoryId])
   @@index([deletedAt])

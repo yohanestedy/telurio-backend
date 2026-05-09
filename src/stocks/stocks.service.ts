@@ -116,62 +116,86 @@ export class StocksService {
       direction === StockMovementDirection.IN
         ? StockMovementType.MANUAL_ADJUST_IN
         : StockMovementType.MANUAL_ADJUST_OUT;
-    const sourceId = generateUuidV7();
+    const idempotencyKey = this.normalizeIdempotencyKey(dto.idempotencyKey);
+    const sourceId = idempotencyKey ?? generateUuidV7();
 
-    const movement = await this.prisma.$transaction(async (tx) => {
-      if (direction === StockMovementDirection.IN) {
-        await tx.coopStockBalance.upsert({
-          where: { coopId: dto.coopId },
-          create: {
-            coopId: dto.coopId,
-            availableKg: quantityKg,
-          },
-          update: {
-            availableKg: { increment: quantityKg },
-          },
-        });
-      } else {
-        await this.consumeStock(
-          tx,
-          dto.coopId,
-          quantityKg,
-          'Stok kandang tidak cukup untuk penyesuaian manual keluar',
-        );
-      }
-
-      return await tx.stockMovement.create({
-        data: {
-          id: generateUuidV7(),
-          coopId: dto.coopId,
-          movementDate,
-          movementType,
-          direction,
+    if (idempotencyKey) {
+      const existingMovement = await this.prisma.stockMovement.findFirst({
+        where: {
           sourceType: StockMovementSource.MANUAL_ADJUSTMENT,
           sourceId,
-          quantityKg,
-          createdById: user.id,
-          notes: dto.notes ?? null,
+          movementType,
+          direction,
         },
       });
-    });
 
-    const latestBalance = await this.prisma.coopStockBalance.findUnique({
-      where: { coopId: dto.coopId },
-      select: { availableKg: true },
-    });
+      if (existingMovement) {
+        return this.formatManualAdjustmentResponse(existingMovement, coop.name);
+      }
+    }
 
-    return {
-      id: movement.id,
-      coopId: dto.coopId,
-      coopName: coop.name,
-      direction,
-      movementType,
-      quantityKg: movement.quantityKg.toString(),
-      notes: movement.notes,
-      movementDate: movement.movementDate,
-      createdAt: movement.createdAt,
-      availableKg: this.formatKg(this.toKg(latestBalance?.availableKg)),
-    };
+    let movement: Awaited<ReturnType<typeof this.prisma.stockMovement.create>>;
+
+    try {
+      movement = await this.prisma.$transaction(async (tx) => {
+        if (direction === StockMovementDirection.IN) {
+          await tx.coopStockBalance.upsert({
+            where: { coopId: dto.coopId },
+            create: {
+              coopId: dto.coopId,
+              availableKg: quantityKg,
+            },
+            update: {
+              availableKg: { increment: quantityKg },
+            },
+          });
+        } else {
+          await this.consumeStock(
+            tx,
+            dto.coopId,
+            quantityKg,
+            'Stok kandang tidak cukup untuk penyesuaian manual keluar',
+          );
+        }
+
+        return await tx.stockMovement.create({
+          data: {
+            id: generateUuidV7(),
+            coopId: dto.coopId,
+            movementDate,
+            movementType,
+            direction,
+            sourceType: StockMovementSource.MANUAL_ADJUSTMENT,
+            sourceId,
+            quantityKg,
+            createdById: user.id,
+            notes: dto.notes ?? null,
+          },
+        });
+      });
+    } catch (error) {
+      if (idempotencyKey && this.isUniqueConstraintError(error)) {
+        const existingMovement = await this.prisma.stockMovement.findFirst({
+          where: {
+            sourceType: StockMovementSource.MANUAL_ADJUSTMENT,
+            sourceId,
+            movementType,
+            direction,
+          },
+        });
+
+        if (existingMovement) {
+          return this.formatManualAdjustmentResponse(
+            existingMovement,
+            coop.name,
+          );
+        }
+      }
+
+      throw error;
+    }
+
+    return this.formatManualAdjustmentResponse(movement, coop.name);
   }
 
   async listMovements(
@@ -806,6 +830,38 @@ export class StocksService {
     return accesses.map((item) => item.coopId);
   }
 
+  private async formatManualAdjustmentResponse(
+    movement: {
+      id: string;
+      coopId: string;
+      direction: StockMovementDirection;
+      movementType: StockMovementType;
+      quantityKg: Prisma.Decimal;
+      notes: string | null;
+      movementDate: Date;
+      createdAt: Date;
+    },
+    coopName: string,
+  ): Promise<ManualStockAdjustmentResponse> {
+    const latestBalance = await this.prisma.coopStockBalance.findUnique({
+      where: { coopId: movement.coopId },
+      select: { availableKg: true },
+    });
+
+    return {
+      id: movement.id,
+      coopId: movement.coopId,
+      coopName,
+      direction: movement.direction,
+      movementType: movement.movementType,
+      quantityKg: movement.quantityKg.toString(),
+      notes: movement.notes,
+      movementDate: movement.movementDate,
+      createdAt: movement.createdAt,
+      availableKg: this.formatKg(this.toKg(latestBalance?.availableKg)),
+    };
+  }
+
   private toKg(value: Prisma.Decimal | number | string | null | undefined) {
     if (value === null || value === undefined) {
       return 0;
@@ -820,5 +876,17 @@ export class StocksService {
 
   private formatKg(value: number) {
     return this.normalizeKg(value).toFixed(3);
+  }
+
+  private normalizeIdempotencyKey(value?: string) {
+    const normalized = value?.trim();
+    return normalized ? normalized : null;
+  }
+
+  private isUniqueConstraintError(error: unknown) {
+    return (
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      error.code === 'P2002'
+    );
   }
 }

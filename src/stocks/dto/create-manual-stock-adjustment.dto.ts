@@ -24,6 +24,11 @@ export class CreateManualStockAdjustmentDto {
 
   @IsOptional()
   @IsString()
+  @Length(8, 120)
+  idempotencyKey?: string;
+
+  @IsOptional()
+  @IsString()
   @Length(1, 255)
   notes?: string;
 }

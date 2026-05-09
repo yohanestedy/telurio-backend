@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { Role } from '@prisma/client';
+import { Prisma, Role } from '@prisma/client';
 import { PrismaService } from '../prisma';
 import {
   ConflictException,
@@ -39,43 +39,50 @@ export class ExpenseCategoriesService {
   }
 
   async createCategory(user: AuthUser, dto: CreateExpenseCategoryDto) {
-    if (user.role !== Role.OWNER) {
-      throw new ForbiddenException('Only OWNER can create expense categories');
+    if (user.role !== Role.ADMIN && user.role !== Role.OWNER) {
+      throw new ForbiddenException('Only ADMIN or OWNER can create categories');
     }
+
+    const ownerId = user.id;
+    const normalizedName = this.normalizeCategoryName(dto.name);
 
     const existing = await this.prisma.expenseCategory.findFirst({
       where: {
-        ownerId: user.id,
+        ownerId,
+        normalizedName,
         deletedAt: null,
-        name: { equals: dto.name, mode: 'insensitive' },
       },
       select: { id: true },
     });
 
     if (existing) {
-      throw new ConflictException(
-        'Expense category name already exists for this owner',
-      );
+      throw new ConflictException('Expense category name already exists');
     }
 
-    const created = await this.prisma.expenseCategory.create({
-      data: {
-        id: generateUuidV7(),
-        ownerId: user.id,
-        name: dto.name,
-        createdById: user.id,
-      },
-      include: {
-        owner: { select: { name: true } },
-      },
-    });
+    try {
+      const created = await this.prisma.expenseCategory.create({
+        data: {
+          id: generateUuidV7(),
+          ownerId,
+          name: dto.name,
+          normalizedName,
+          createdById: user.id,
+        },
+      });
 
-    return {
-      id: created.id,
-      name: created.name,
-      isActive: created.isActive,
-      ownerName: created.owner.name,
-    };
+      return {
+        id: created.id,
+        name: created.name,
+        isActive: created.isActive,
+        ownerName: null,
+      };
+    } catch (error) {
+      if (this.isUniqueConstraintError(error)) {
+        throw new ConflictException('Expense category name already exists');
+      }
+
+      throw error;
+    }
   }
 
   async updateCategory(
@@ -102,27 +109,31 @@ export class ExpenseCategoriesService {
     }
 
     if (dto.name !== undefined) {
+      const normalizedName = this.normalizeCategoryName(dto.name);
       const duplicate = await this.prisma.expenseCategory.findFirst({
         where: {
-          ownerId: user.id,
+          ownerId: category.ownerId,
+          normalizedName,
           deletedAt: null,
           NOT: { id: categoryId },
-          name: { equals: dto.name, mode: 'insensitive' },
         },
         select: { id: true },
       });
 
       if (duplicate) {
-        throw new ConflictException(
-          'Expense category name already exists for this owner',
-        );
+        throw new ConflictException('Expense category name already exists');
       }
     }
 
     const updated = await this.prisma.expenseCategory.update({
       where: { id: categoryId },
       data: {
-        ...(dto.name !== undefined ? { name: dto.name } : {}),
+        ...(dto.name !== undefined
+          ? {
+              name: dto.name,
+              normalizedName: this.normalizeCategoryName(dto.name),
+            }
+          : {}),
         ...(dto.isActive !== undefined ? { isActive: dto.isActive } : {}),
         updatedById: user.id,
         updatedAt: new Date(),
@@ -173,5 +184,16 @@ export class ExpenseCategoriesService {
     });
 
     return { success: true };
+  }
+
+  private normalizeCategoryName(value: string) {
+    return value.trim().replace(/\s+/g, ' ').toLocaleLowerCase('id-ID');
+  }
+
+  private isUniqueConstraintError(error: unknown) {
+    return (
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      error.code === 'P2002'
+    );
   }
 }

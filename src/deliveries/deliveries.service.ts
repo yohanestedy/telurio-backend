@@ -210,8 +210,13 @@ export class DeliveriesService {
       throw new BusinessRuleException('Order is not in delivery process');
     }
 
-    await this.prisma.order.update({
-      where: { id: orderId },
+    const updateResult = await this.prisma.order.updateMany({
+      where: {
+        id: orderId,
+        lifecycleStatus: OrderLifecycleStatus.ACTIVE,
+        deliveryStatus: DeliveryStatus.SEDANG_DIHANTAR,
+        updatedAt: order.updatedAt,
+      },
       data: {
         deliveryStatus: DeliveryStatus.SUDAH_DIHANTAR,
         deliveredById: user.id,
@@ -219,6 +224,12 @@ export class DeliveriesService {
         updatedAt: new Date(),
       },
     });
+
+    if (updateResult.count !== 1) {
+      throw new BusinessRuleException(
+        'Order has changed, please reload and retry',
+      );
+    }
 
     return {
       orderId,
@@ -250,12 +261,7 @@ export class DeliveriesService {
     const coopIds = dto.allocations.map((item) => item.coopId);
     await this.validateAllocationScope(user, coopIds);
 
-    const existingAllocations =
-      await this.prisma.orderSourceAllocation.findMany({
-        where: { orderId },
-        select: { id: true, coopId: true, quantityKg: true },
-      });
-
+    const expectedUpdatedAt = new Date(dto.orderUpdatedAt);
     const movementDate = getTodayDateOnlyUtc();
     const nextAllocations = dto.allocations.map((item) => ({
       id: generateUuidV7(),
@@ -264,6 +270,30 @@ export class DeliveriesService {
     }));
 
     await this.prisma.$transaction(async (tx) => {
+      const updateResult = await tx.order.updateMany({
+        where: {
+          id: orderId,
+          lifecycleStatus: OrderLifecycleStatus.ACTIVE,
+          deliveryStatus: DeliveryStatus.SEDANG_DIHANTAR,
+          updatedAt: expectedUpdatedAt,
+        },
+        data: {
+          updatedById: user.id,
+          updatedAt: new Date(),
+        },
+      });
+
+      if (updateResult.count !== 1) {
+        throw new BusinessRuleException(
+          'Order allocation has changed, please reload and retry',
+        );
+      }
+
+      const existingAllocations = await tx.orderSourceAllocation.findMany({
+        where: { orderId },
+        select: { id: true, coopId: true, quantityKg: true },
+      });
+
       await this.stocksService.reconcileOrderAllocations(tx, {
         orderId,
         movementDate,
@@ -283,14 +313,6 @@ export class DeliveriesService {
           updatedById: user.id,
           updatedAt: new Date(),
         })),
-      });
-
-      await tx.order.update({
-        where: { id: orderId },
-        data: {
-          updatedById: user.id,
-          updatedAt: new Date(),
-        },
       });
     });
 

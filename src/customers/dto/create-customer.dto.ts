@@ -14,4 +14,9 @@ export class CreateCustomerDto {
   @IsString()
   @Length(6, 30)
   phone?: string;
+
+  @IsOptional()
+  @IsString()
+  @Length(8, 120)
+  idempotencyKey?: string;
 }

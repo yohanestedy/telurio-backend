@@ -125,33 +125,85 @@ export class GeneralExpensesService {
       await this.validateCategory(dto.categoryId, ownerId);
     }
 
-    const created = await this.prisma.generalExpense.create({
-      data: {
-        id: generateUuidV7(),
-        ownerId,
-        date: new Date(dto.date),
-        amount: BigInt(dto.amount),
-        description: dto.description,
-        categoryId: dto.categoryId ?? null,
-        notes: dto.notes ?? null,
-        createdById: user.id,
-      },
-      include: {
-        category: { select: { id: true, name: true } },
-      },
-    });
+    const idempotencyKey = this.normalizeIdempotencyKey(dto.idempotencyKey);
+    const include = {
+      category: { select: { id: true, name: true } },
+    } satisfies Prisma.GeneralExpenseInclude;
 
+    if (idempotencyKey) {
+      const existing = await this.prisma.generalExpense.findFirst({
+        where: { createdById: user.id, idempotencyKey },
+        include,
+      });
+
+      if (existing) {
+        return this.formatGeneralExpense(existing);
+      }
+    }
+
+    try {
+      const created = await this.prisma.generalExpense.create({
+        data: {
+          id: generateUuidV7(),
+          ownerId,
+          date: new Date(dto.date),
+          amount: BigInt(dto.amount),
+          description: dto.description,
+          categoryId: dto.categoryId ?? null,
+          notes: dto.notes ?? null,
+          idempotencyKey,
+          createdById: user.id,
+        },
+        include,
+      });
+
+      return this.formatGeneralExpense(created);
+    } catch (error) {
+      if (idempotencyKey && this.isUniqueConstraintError(error)) {
+        const existing = await this.prisma.generalExpense.findFirst({
+          where: { createdById: user.id, idempotencyKey },
+          include,
+        });
+
+        if (existing) {
+          return this.formatGeneralExpense(existing);
+        }
+      }
+
+      throw error;
+    }
+  }
+
+  private formatGeneralExpense(
+    expense: Prisma.GeneralExpenseGetPayload<{
+      include: {
+        category: { select: { id: true; name: true } };
+      };
+    }>,
+  ) {
     return {
-      id: created.id,
-      ownerId: created.ownerId,
-      date: created.date,
-      amount: created.amount,
-      description: created.description,
-      categoryId: created.categoryId,
-      categoryName: created.category?.name ?? null,
-      notes: created.notes,
-      createdAt: created.createdAt,
+      id: expense.id,
+      ownerId: expense.ownerId,
+      date: expense.date,
+      amount: expense.amount,
+      description: expense.description,
+      categoryId: expense.categoryId,
+      categoryName: expense.category?.name ?? null,
+      notes: expense.notes,
+      createdAt: expense.createdAt,
     };
+  }
+
+  private normalizeIdempotencyKey(value?: string) {
+    const normalized = value?.trim();
+    return normalized ? normalized : null;
+  }
+
+  private isUniqueConstraintError(error: unknown) {
+    return (
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      error.code === 'P2002'
+    );
   }
 
   async updateGeneralExpense(

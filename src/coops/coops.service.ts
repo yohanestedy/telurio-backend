@@ -94,48 +94,69 @@ export class CoopsService {
       throw new ConflictException('Coop name already exists');
     }
 
-    const created = await this.prisma.$transaction(async (tx) => {
-      const createdCoop = await tx.coop.create({
-        data: {
-          id: generateUuidV7(),
-          name: dto.name,
-          population: dto.population,
-          chickenStrain: dto.chickenStrain ?? null,
-          chickBirthDate: dto.chickBirthDate
-            ? new Date(dto.chickBirthDate)
-            : null,
-          depreciationPercent: dto.depreciationPercent ?? 15,
-          createdById: actor.id,
-        },
-        select: {
-          id: true,
-          name: true,
-          population: true,
-          chickenStrain: true,
-          chickBirthDate: true,
-          depreciationPercent: true,
-          isActive: true,
-          createdAt: true,
-          updatedAt: true,
-        },
-      });
+    let created: Prisma.CoopGetPayload<{
+      select: {
+        id: true;
+        name: true;
+        population: true;
+        chickenStrain: true;
+        chickBirthDate: true;
+        depreciationPercent: true;
+        isActive: true;
+        createdAt: true;
+        updatedAt: true;
+      };
+    }>;
 
-      await tx.coopPopulationHistory.create({
-        data: {
-          id: generateUuidV7(),
-          coopId: createdCoop.id,
-          effectiveDate: getTodayDateOnlyUtc(),
-          previousPopulation: null,
-          newPopulation: createdCoop.population,
-          deltaPopulation: createdCoop.population,
-          changeType: CoopPopulationChangeType.INITIAL,
-          reason: dto.populationChangeReason ?? null,
-          createdById: actor.id,
-        },
-      });
+    try {
+      created = await this.prisma.$transaction(async (tx) => {
+        const createdCoop = await tx.coop.create({
+          data: {
+            id: generateUuidV7(),
+            name: dto.name,
+            population: dto.population,
+            chickenStrain: dto.chickenStrain ?? null,
+            chickBirthDate: dto.chickBirthDate
+              ? new Date(dto.chickBirthDate)
+              : null,
+            depreciationPercent: dto.depreciationPercent ?? 15,
+            createdById: actor.id,
+          },
+          select: {
+            id: true,
+            name: true,
+            population: true,
+            chickenStrain: true,
+            chickBirthDate: true,
+            depreciationPercent: true,
+            isActive: true,
+            createdAt: true,
+            updatedAt: true,
+          },
+        });
 
-      return createdCoop;
-    });
+        await tx.coopPopulationHistory.create({
+          data: {
+            id: generateUuidV7(),
+            coopId: createdCoop.id,
+            effectiveDate: getTodayDateOnlyUtc(),
+            previousPopulation: null,
+            newPopulation: createdCoop.population,
+            deltaPopulation: createdCoop.population,
+            changeType: CoopPopulationChangeType.INITIAL,
+            reason: dto.populationChangeReason ?? null,
+            createdById: actor.id,
+          },
+        });
+
+        return createdCoop;
+      });
+    } catch (error) {
+      if (this.isUniqueConstraintError(error)) {
+        throw new ConflictException('Coop name already exists');
+      }
+      throw error;
+    }
 
     return {
       ...created,
@@ -208,7 +229,10 @@ export class CoopsService {
       dto.population !== undefined && dto.population !== existing.population;
     const populationEffectiveDate = populationChanged
       ? dto.populationEffectiveDate
-        ? parseDateOnlyUtc(dto.populationEffectiveDate, 'populationEffectiveDate')
+        ? parseDateOnlyUtc(
+            dto.populationEffectiveDate,
+            'populationEffectiveDate',
+          )
         : getTodayDateOnlyUtc()
       : null;
 
@@ -252,5 +276,12 @@ export class CoopsService {
       ...updated,
       depreciationPercent: updated.depreciationPercent.toString(),
     };
+  }
+
+  private isUniqueConstraintError(error: unknown): boolean {
+    return (
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      error.code === 'P2002'
+    );
   }
 }

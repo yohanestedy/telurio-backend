@@ -160,12 +160,11 @@ export class ProductionsService {
       throw new ForbiddenException('Coop is outside your scope');
     }
 
-    const coopFilter: Prisma.ProductionRecordWhereInput['coopId'] =
-      query.coopId
-        ? query.coopId
-        : user.role === Role.ADMIN
-          ? undefined
-          : { in: allowedCoopIds };
+    const coopFilter: Prisma.ProductionRecordWhereInput['coopId'] = query.coopId
+      ? query.coopId
+      : user.role === Role.ADMIN
+        ? undefined
+        : { in: allowedCoopIds };
 
     const [currentRows, previousRows] = await Promise.all([
       this.getAnalyticsRows(startDate, endDate, coopFilter),
@@ -229,51 +228,48 @@ export class ProductionsService {
       throw new NotFoundException('Coop not found');
     }
 
-    const duplicate = await this.prisma.productionRecord.findFirst({
-      where: {
-        date: new Date(dto.date),
-        coopId: dto.coopId,
-        collectionTime: dto.collectionTime,
-        deletedAt: null,
-      },
-      select: { id: true },
-    });
+    let created: Prisma.ProductionRecordGetPayload<{
+      include: { coop: { select: { name: true } } };
+    }>;
 
-    if (duplicate) {
-      throw new ConflictException(
-        'Duplicate production collection time for this date and coop',
-      );
-    }
+    try {
+      created = await this.prisma.$transaction(async (tx) => {
+        const createdRecord = await tx.productionRecord.create({
+          data: {
+            id: generateUuidV7(),
+            date: new Date(dto.date),
+            coopId: dto.coopId,
+            collectionTime: dto.collectionTime,
+            goodKg: dto.goodKg,
+            goodCount: dto.goodCount,
+            brokenCount: dto.brokenCount ?? null,
+            populationSnapshot: coop.population,
+            notes: dto.notes ?? null,
+            createdById: user.id,
+          },
+          include: {
+            coop: { select: { name: true } },
+          },
+        });
 
-    const created = await this.prisma.$transaction(async (tx) => {
-      const createdRecord = await tx.productionRecord.create({
-        data: {
-          id: generateUuidV7(),
-          date: new Date(dto.date),
-          coopId: dto.coopId,
-          collectionTime: dto.collectionTime,
-          goodKg: dto.goodKg,
-          goodCount: dto.goodCount,
-          brokenCount: dto.brokenCount ?? null,
-          populationSnapshot: coop.population,
-          notes: dto.notes ?? null,
+        await this.stocksService.addProductionStock(tx, {
+          coopId: createdRecord.coopId,
+          movementDate: getTodayDateOnlyUtc(),
+          quantityKg: Number(createdRecord.goodKg),
+          sourceId: createdRecord.id,
           createdById: user.id,
-        },
-        include: {
-          coop: { select: { name: true } },
-        },
-      });
+        });
 
-      await this.stocksService.addProductionStock(tx, {
-        coopId: createdRecord.coopId,
-        movementDate: getTodayDateOnlyUtc(),
-        quantityKg: Number(createdRecord.goodKg),
-        sourceId: createdRecord.id,
-        createdById: user.id,
+        return createdRecord;
       });
-
-      return createdRecord;
-    });
+    } catch (error) {
+      if (this.isUniqueConstraintError(error)) {
+        throw new ConflictException(
+          'Duplicate production collection time for this date and coop',
+        );
+      }
+      throw error;
+    }
 
     return {
       id: created.id,
@@ -294,7 +290,7 @@ export class ProductionsService {
   async updateProduction(id: string, user: AuthUser, dto: UpdateProductionDto) {
     const existing = await this.prisma.productionRecord.findFirst({
       where: { id, deletedAt: null },
-      select: { id: true, coopId: true, goodKg: true },
+      select: { id: true, coopId: true, goodKg: true, updatedAt: true },
     });
 
     if (!existing) {
@@ -302,8 +298,8 @@ export class ProductionsService {
     }
 
     const updated = await this.prisma.$transaction(async (tx) => {
-      const updatedRecord = await tx.productionRecord.update({
-        where: { id },
+      const updateResult = await tx.productionRecord.updateMany({
+        where: { id, deletedAt: null, updatedAt: existing.updatedAt },
         data: {
           ...(dto.goodKg !== undefined ? { goodKg: dto.goodKg } : {}),
           ...(dto.goodCount !== undefined ? { goodCount: dto.goodCount } : {}),
@@ -314,6 +310,16 @@ export class ProductionsService {
           updatedById: user.id,
           updatedAt: new Date(),
         },
+      });
+
+      if (updateResult.count !== 1) {
+        throw new ConflictException(
+          'Production record was already changed, please reload and retry',
+        );
+      }
+
+      const updatedRecord = await tx.productionRecord.findUniqueOrThrow({
+        where: { id },
         include: {
           coop: { select: { name: true } },
         },
@@ -357,16 +363,8 @@ export class ProductionsService {
     }
 
     await this.prisma.$transaction(async (tx) => {
-      await this.stocksService.removeProductionStock(tx, {
-        coopId: existing.coopId,
-        movementDate: getTodayDateOnlyUtc(),
-        quantityKg: Number(existing.goodKg),
-        sourceId: existing.id,
-        createdById: user.id,
-      });
-
-      await tx.productionRecord.update({
-        where: { id },
+      const deleteResult = await tx.productionRecord.updateMany({
+        where: { id, deletedAt: null },
         data: {
           deletedAt: new Date(),
           deletedById: user.id,
@@ -374,6 +372,18 @@ export class ProductionsService {
           updatedById: user.id,
           updatedAt: new Date(),
         },
+      });
+
+      if (deleteResult.count !== 1) {
+        throw new ConflictException('Production record was already deleted');
+      }
+
+      await this.stocksService.removeProductionStock(tx, {
+        coopId: existing.coopId,
+        movementDate: getTodayDateOnlyUtc(),
+        quantityKg: Number(existing.goodKg),
+        sourceId: existing.id,
+        createdById: user.id,
       });
     });
 
@@ -451,12 +461,10 @@ export class ProductionsService {
 
     for (const row of rows) {
       const key = toDateKey(row.date);
-      const bucket =
-        rowMap.get(key) ??
-        {
-          goodCount: 0,
-          populationByCoop: new Map<string, number>(),
-        };
+      const bucket = rowMap.get(key) ?? {
+        goodCount: 0,
+        populationByCoop: new Map<string, number>(),
+      };
 
       bucket.goodCount += row.goodCount;
       if (row.populationSnapshot !== null) {
@@ -473,7 +481,10 @@ export class ProductionsService {
       const hasProduction = Boolean(row);
       const goodCount = row?.goodCount ?? 0;
       const population = row?.populationByCoop.size
-        ? [...row.populationByCoop.values()].reduce((sum, item) => sum + item, 0)
+        ? [...row.populationByCoop.values()].reduce(
+            (sum, item) => sum + item,
+            0,
+          )
         : null;
       const performancePercent =
         population && population > 0
@@ -493,7 +504,10 @@ export class ProductionsService {
   private buildAnalyticsSummary(
     series: ReturnType<ProductionsService['buildAnalyticsSeries']>,
   ) {
-    const totalGoodCount = series.reduce((sum, item) => sum + item.goodCount, 0);
+    const totalGoodCount = series.reduce(
+      (sum, item) => sum + item.goodCount,
+      0,
+    );
     const populationItems = series.filter(
       (item) => item.averagePopulation !== null,
     );
@@ -531,5 +545,12 @@ export class ProductionsService {
     }
 
     return Number((((current - previous) / previous) * 100).toFixed(1));
+  }
+
+  private isUniqueConstraintError(error: unknown): boolean {
+    return (
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      error.code === 'P2002'
+    );
   }
 }

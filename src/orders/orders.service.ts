@@ -146,6 +146,7 @@ export class OrdersService {
           notes: row.notes,
           createdByName: creatorMap.get(row.createdById) ?? null,
           createdAt: row.createdAt,
+          updatedAt: row.updatedAt,
         };
       }),
       meta: buildPaginationMeta({
@@ -407,8 +408,14 @@ export class OrdersService {
       nextTotalInvoice = null;
     }
 
-    const updated = await this.prisma.order.update({
-      where: { id },
+    const updateResult = await this.prisma.order.updateMany({
+      where: {
+        id,
+        lifecycleStatus: OrderLifecycleStatus.ACTIVE,
+        deliveryStatus: DeliveryStatus.BELUM_DIHANTAR,
+        deliveryDate: existing.deliveryDate,
+        updatedAt: existing.updatedAt,
+      },
       data: {
         ...(dto.quantityKg !== undefined ? { quantityKg: dto.quantityKg } : {}),
         ...(dto.deliveryDate ? { deliveryDate: nextDeliveryDate } : {}),
@@ -424,7 +431,13 @@ export class OrdersService {
       },
     });
 
-    return this.getOrderById(updated.id);
+    if (updateResult.count !== 1) {
+      throw new BusinessRuleException(
+        'Order has changed, please reload and retry',
+      );
+    }
+
+    return this.getOrderById(id);
   }
 
   async cancelOrder(id: string, user: AuthUser, dto: CancelOrderDto) {
@@ -442,8 +455,13 @@ export class OrdersService {
       );
     }
 
-    const updated = await this.prisma.order.update({
-      where: { id },
+    const updateResult = await this.prisma.order.updateMany({
+      where: {
+        id,
+        lifecycleStatus: OrderLifecycleStatus.ACTIVE,
+        deliveryStatus: DeliveryStatus.BELUM_DIHANTAR,
+        updatedAt: existing.updatedAt,
+      },
       data: {
         lifecycleStatus: OrderLifecycleStatus.CANCELLED,
         cancelledAt: new Date(),
@@ -455,7 +473,13 @@ export class OrdersService {
       },
     });
 
-    return this.getOrderById(updated.id);
+    if (updateResult.count !== 1) {
+      throw new BusinessRuleException(
+        'Order has changed, please reload and retry',
+      );
+    }
+
+    return this.getOrderById(id);
   }
 
   async ensureOrderAccess(orderId: string, user: AuthUser) {
@@ -530,6 +554,7 @@ export class OrdersService {
       notes: row.notes,
       createdByName: creator?.name ?? null,
       createdAt: row.createdAt,
+      updatedAt: row.updatedAt,
     };
   }
 

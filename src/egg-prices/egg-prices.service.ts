@@ -101,27 +101,25 @@ export class EggPricesService {
   async createPrice(actor: AuthUser, dto: CreateEggPriceDto) {
     const effectiveDate = parseDateOnlyUtc(dto.effectiveDate, 'effectiveDate');
 
-    const existing = await this.prisma.eggPrice.findFirst({
-      where: {
-        effectiveDate,
-      },
-      select: { id: true },
-    });
+    let created: Awaited<ReturnType<typeof this.prisma.eggPrice.create>>;
 
-    if (existing) {
-      throw new ConflictException('Price for effective date already exists');
+    try {
+      created = await this.prisma.eggPrice.create({
+        data: {
+          id: generateUuidV7(),
+          effectiveDate,
+          pricePerKg: BigInt(dto.pricePerKg),
+          notes: dto.notes ?? null,
+          createdById: actor.id,
+          updatedById: actor.id,
+        },
+      });
+    } catch (error) {
+      if (this.isUniqueConstraintError(error)) {
+        throw new ConflictException('Price for effective date already exists');
+      }
+      throw error;
     }
-
-    const created = await this.prisma.eggPrice.create({
-      data: {
-        id: generateUuidV7(),
-        effectiveDate,
-        pricePerKg: BigInt(dto.pricePerKg),
-        notes: dto.notes ?? null,
-        createdById: actor.id,
-        updatedById: actor.id,
-      },
-    });
 
     return this.attachUpdatedByName(created);
   }
@@ -178,5 +176,12 @@ export class EggPricesService {
       notes: row.notes,
       updatedByName,
     };
+  }
+
+  private isUniqueConstraintError(error: unknown): boolean {
+    return (
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      error.code === 'P2002'
+    );
   }
 }

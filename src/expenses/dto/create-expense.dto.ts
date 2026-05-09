@@ -32,6 +32,6 @@ export class CreateExpenseDto {
 
   @IsOptional()
   @IsString()
-  @Length(1, 255)
-  notes?: string;
+  @Length(8, 120)
+  idempotencyKey?: string;
 }
