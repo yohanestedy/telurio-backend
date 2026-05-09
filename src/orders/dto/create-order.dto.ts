@@ -13,15 +13,15 @@ import { PaymentMethod, PaymentStatus } from '@prisma/client';
 
 export class CreateOrderDto {
   @IsUUID()
-  customerId: string;
+  customerId!: string;
 
   @Type(() => Number)
   @IsNumber({ maxDecimalPlaces: 3 })
   @Min(0.001)
-  quantityKg: number;
+  quantityKg!: number;
 
   @IsDateString()
-  deliveryDate: string;
+  deliveryDate!: string;
 
   @IsOptional()
   @Type(() => Number)
@@ -47,6 +47,11 @@ export class CreateOrderDto {
   @IsNumber({ maxDecimalPlaces: 0 })
   @Min(0)
   dpAmount?: number;
+
+  @IsOptional()
+  @IsString()
+  @Length(8, 120)
+  idempotencyKey?: string;
 
   @IsOptional()
   @IsString()

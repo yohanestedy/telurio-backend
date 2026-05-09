@@ -170,6 +170,19 @@ export class OrdersService {
   }
 
   async createOrder(user: AuthUser, dto: CreateOrderDto) {
+    const idempotencyKey = this.normalizeIdempotencyKey(dto.idempotencyKey);
+
+    if (idempotencyKey) {
+      const existing = await this.prisma.order.findFirst({
+        where: { createdById: user.id, idempotencyKey },
+        select: { id: true },
+      });
+
+      if (existing) {
+        return this.getOrderById(existing.id);
+      }
+    }
+
     const customer = await this.prisma.customer.findFirst({
       where: { id: dto.customerId, deletedAt: null },
       select: { id: true },
@@ -243,46 +256,64 @@ export class OrdersService {
       throw new BusinessRuleException('LUNAS requires paymentMethod');
     }
 
-    const created = await this.prisma.$transaction(async (tx) => {
-      const order = await tx.order.create({
-        data: {
-          id: generateUuidV7(),
-          customerId: dto.customerId,
-          quantityKg: dto.quantityKg,
-          pricePerKg: lockedPrice,
-          priceSource: lockedPriceSource,
-          totalInvoice,
-          deliveryDate,
-          deliverBefore: dto.deliverBefore ?? null,
-          paymentStatus,
-          paymentMethod: dto.paymentMethod ?? null,
-          dpAmount: dto.dpAmount !== undefined ? BigInt(dto.dpAmount) : null,
-          notes: dto.notes ?? null,
-          createdById: user.id,
-        },
-      });
+    let created: { id: string };
 
-      if (paymentStatus !== PaymentStatus.BELUM_BAYAR) {
-        await tx.paymentHistory.create({
+    try {
+      created = await this.prisma.$transaction(async (tx) => {
+        const order = await tx.order.create({
           data: {
             id: generateUuidV7(),
-            orderId: order.id,
+            customerId: dto.customerId,
+            quantityKg: dto.quantityKg,
+            pricePerKg: lockedPrice,
+            priceSource: lockedPriceSource,
+            totalInvoice,
+            deliveryDate,
+            deliverBefore: dto.deliverBefore ?? null,
             paymentStatus,
             paymentMethod: dto.paymentMethod ?? null,
-            amountPaid:
-              paymentStatus === PaymentStatus.DP && dto.dpAmount !== undefined
-                ? BigInt(dto.dpAmount)
-                : paymentStatus === PaymentStatus.LUNAS
-                  ? order.totalInvoice
-                  : null,
-            notes: 'Initial payment status at order creation',
-            updatedById: user.id,
+            dpAmount: dto.dpAmount !== undefined ? BigInt(dto.dpAmount) : null,
+            notes: dto.notes ?? null,
+            idempotencyKey,
+            createdById: user.id,
           },
         });
+
+        if (paymentStatus !== PaymentStatus.BELUM_BAYAR) {
+          await tx.paymentHistory.create({
+            data: {
+              id: generateUuidV7(),
+              orderId: order.id,
+              paymentStatus,
+              paymentMethod: dto.paymentMethod ?? null,
+              amountPaid:
+                paymentStatus === PaymentStatus.DP && dto.dpAmount !== undefined
+                  ? BigInt(dto.dpAmount)
+                  : paymentStatus === PaymentStatus.LUNAS
+                    ? order.totalInvoice
+                    : null,
+              notes: 'Initial payment status at order creation',
+              updatedById: user.id,
+            },
+          });
+        }
+
+        return order;
+      });
+    } catch (error) {
+      if (this.isUniqueConstraintError(error) && idempotencyKey) {
+        const existing = await this.prisma.order.findFirst({
+          where: { createdById: user.id, idempotencyKey },
+          select: { id: true },
+        });
+
+        if (existing) {
+          return this.getOrderById(existing.id);
+        }
       }
 
-      return order;
-    });
+      throw error;
+    }
 
     const orderDetail = await this.getOrderById(created.id);
     void this.notificationsService.notifyOrderCreated(orderDetail);
@@ -538,5 +569,17 @@ export class OrdersService {
     });
 
     return accesses.map((a) => a.coopId);
+  }
+
+  private normalizeIdempotencyKey(value?: string) {
+    const normalized = value?.trim();
+    return normalized ? normalized : null;
+  }
+
+  private isUniqueConstraintError(error: unknown) {
+    return (
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      error.code === 'P2002'
+    );
   }
 }

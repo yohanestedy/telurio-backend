@@ -240,6 +240,7 @@ model Order {
   // MVP allows only one DP per order. Keep null when payment status is BELUM_BAYAR or LUNAS-without-DP-history.
   dpAmount         BigInt?                 @db.BigInt
   notes            String?
+  idempotencyKey   String?
   createdById      String                  @db.Uuid
   updatedById      String?                 @db.Uuid
   // Filled when operator presses `Hantar`.
@@ -257,6 +258,7 @@ model Order {
   paymentHistories PaymentHistory[]
   stockMovements   StockMovement[]
 
+  @@unique([createdById, idempotencyKey])
   @@index([deliveryDate, lifecycleStatus, deliveryStatus])
   @@index([paymentStatus])
   @@index([customerId])
@@ -287,6 +289,7 @@ model StockMovement {
   coop         Coop                   @relation(fields: [coopId], references: [id])
   order        Order?                 @relation(fields: [orderId], references: [id])
 
+  @@unique([sourceType, sourceId, movementType, direction])
   @@index([coopId, movementDate])
   @@index([movementType, movementDate])
   @@index([sourceType, sourceId])

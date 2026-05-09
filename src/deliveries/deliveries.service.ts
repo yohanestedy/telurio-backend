@@ -139,6 +139,36 @@ export class DeliveriesService {
     }));
 
     await this.prisma.$transaction(async (tx) => {
+      const lockedOrder = await tx.order.updateMany({
+        where: {
+          id: orderId,
+          lifecycleStatus: OrderLifecycleStatus.ACTIVE,
+          deliveryStatus: DeliveryStatus.BELUM_DIHANTAR,
+        },
+        data: {
+          deliveryStatus: DeliveryStatus.SEDANG_DIHANTAR,
+          startedById: user.id,
+          pricePerKg: lockedPricePerKg,
+          priceSource: lockedPriceSource,
+          totalInvoice,
+          updatedById: user.id,
+          updatedAt: new Date(),
+        },
+      });
+
+      if (lockedOrder.count !== 1) {
+        throw new BusinessRuleException(
+          'Order cannot start delivery in current status',
+        );
+      }
+
+      const allocationCount = await tx.orderSourceAllocation.count({
+        where: { orderId },
+      });
+      if (allocationCount > 0) {
+        throw new BusinessRuleException('Order already has source allocations');
+      }
+
       await this.stocksService.reserveForOrderAllocations(tx, {
         orderId,
         movementDate,
@@ -158,19 +188,6 @@ export class DeliveriesService {
           quantityKg: item.quantityKg,
           assignedById: user.id,
         })),
-      });
-
-      await tx.order.update({
-        where: { id: orderId },
-        data: {
-          deliveryStatus: DeliveryStatus.SEDANG_DIHANTAR,
-          startedById: user.id,
-          pricePerKg: lockedPricePerKg,
-          priceSource: lockedPriceSource,
-          totalInvoice,
-          updatedById: user.id,
-          updatedAt: new Date(),
-        },
       });
     });
 

@@ -102,8 +102,11 @@ export class PaymentsService {
     }
 
     await this.prisma.$transaction(async (tx) => {
-      await tx.order.update({
-        where: { id: orderId },
+      const updated = await tx.order.updateMany({
+        where: {
+          id: orderId,
+          paymentStatus: order.paymentStatus,
+        },
         data: {
           paymentStatus: dto.paymentStatus,
           paymentMethod: dto.paymentMethod ?? null,
@@ -114,6 +117,12 @@ export class PaymentsService {
           updatedAt: new Date(),
         },
       });
+
+      if (updated.count !== 1) {
+        throw new BusinessRuleException(
+          'Payment status was already updated; please refresh and try again',
+        );
+      }
 
       await tx.paymentHistory.create({
         data: {
