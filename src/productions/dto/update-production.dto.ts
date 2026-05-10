@@ -12,19 +12,19 @@ export class UpdateProductionDto {
   @IsOptional()
   @Type(() => Number)
   @IsNumber({ maxDecimalPlaces: 3 })
-  @Min(0)
+  @Min(0.001)
   goodKg?: number;
 
   @IsOptional()
   @Type(() => Number)
   @IsInt()
-  @Min(0)
+  @Min(1)
   goodCount?: number;
 
   @IsOptional()
   @Type(() => Number)
   @IsInt()
-  @Min(0)
+  @Min(1)
   brokenCount?: number;
 
   @IsOptional()

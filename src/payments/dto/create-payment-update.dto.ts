@@ -11,7 +11,7 @@ import { PaymentMethod, PaymentStatus } from '@prisma/client';
 
 export class CreatePaymentUpdateDto {
   @IsEnum(PaymentStatus)
-  paymentStatus: PaymentStatus;
+  paymentStatus!: PaymentStatus;
 
   @IsOptional()
   @IsEnum(PaymentMethod)
@@ -20,7 +20,7 @@ export class CreatePaymentUpdateDto {
   @IsOptional()
   @Type(() => Number)
   @IsNumber({ maxDecimalPlaces: 0 })
-  @Min(0)
+  @Min(1000)
   amountPaid?: number;
 
   @IsOptional()

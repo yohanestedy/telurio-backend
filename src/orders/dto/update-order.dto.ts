@@ -12,7 +12,7 @@ export class UpdateOrderDto {
   @IsOptional()
   @Type(() => Number)
   @IsNumber({ maxDecimalPlaces: 3 })
-  @Min(0.001)
+  @Min(0.1)
   quantityKg?: number;
 
   @IsOptional()

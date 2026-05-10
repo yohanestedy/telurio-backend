@@ -17,7 +17,7 @@ export class UpdateGeneralExpenseDto {
   @IsOptional()
   @Type(() => Number)
   @IsNumber({ maxDecimalPlaces: 0 })
-  @Min(1)
+  @Min(500)
   amount?: number;
 
   @IsOptional()

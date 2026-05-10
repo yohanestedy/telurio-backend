@@ -11,24 +11,23 @@ import {
 
 export class CreateExpenseDto {
   @IsDateString()
-  date: string;
+  date!: string;
 
   @IsUUID()
-  coopId: string;
+  coopId!: string;
 
   @IsOptional()
   @IsUUID()
   expenseCategoryId?: string | null;
 
-  @IsOptional()
   @IsString()
   @Length(1, 255)
-  description?: string;
+  description!: string;
 
   @Type(() => Number)
   @IsNumber({ maxDecimalPlaces: 0 })
-  @Min(0)
-  amount: number;
+  @Min(500)
+  amount!: number;
 
   @IsOptional()
   @IsString()

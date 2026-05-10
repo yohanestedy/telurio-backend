@@ -11,16 +11,16 @@ import {
 
 export class CreateGeneralExpenseDto {
   @IsDateString()
-  date: string;
+  date!: string;
 
   @Type(() => Number)
   @IsNumber({ maxDecimalPlaces: 0 })
-  @Min(1)
-  amount: number;
+  @Min(500)
+  amount!: number;
 
   @IsString()
   @Length(1, 255)
-  description: string;
+  description!: string;
 
   @IsOptional()
   @IsUUID()

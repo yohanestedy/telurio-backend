@@ -12,15 +12,15 @@ import { stockMovementDirectionValues } from './query-stock-movements.dto';
 
 export class CreateManualStockAdjustmentDto {
   @IsUUID()
-  coopId: string;
+  coopId!: string;
 
   @IsIn(stockMovementDirectionValues)
-  direction: (typeof stockMovementDirectionValues)[number];
+  direction!: (typeof stockMovementDirectionValues)[number];
 
   @Type(() => Number)
   @IsNumber({ maxDecimalPlaces: 3 })
-  @Min(0.001)
-  quantityKg: number;
+  @Min(0.01)
+  quantityKg!: number;
 
   @IsOptional()
   @IsString()

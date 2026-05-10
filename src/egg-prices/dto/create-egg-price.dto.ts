@@ -10,12 +10,12 @@ import {
 
 export class CreateEggPriceDto {
   @IsDateString()
-  effectiveDate: string;
+  effectiveDate!: string;
 
   @Type(() => Number)
   @IsNumber({ maxDecimalPlaces: 0 })
-  @Min(0)
-  pricePerKg: number;
+  @Min(5000)
+  pricePerKg!: number;
 
   @IsOptional()
   @IsString()

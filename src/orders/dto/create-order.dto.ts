@@ -17,7 +17,7 @@ export class CreateOrderDto {
 
   @Type(() => Number)
   @IsNumber({ maxDecimalPlaces: 3 })
-  @Min(0.001)
+  @Min(0.1)
   quantityKg!: number;
 
   @IsDateString()
@@ -26,7 +26,7 @@ export class CreateOrderDto {
   @IsOptional()
   @Type(() => Number)
   @IsNumber({ maxDecimalPlaces: 0 })
-  @Min(0)
+  @Min(5000)
   customPricePerKg?: number;
 
   @IsOptional()
@@ -45,7 +45,7 @@ export class CreateOrderDto {
   @IsOptional()
   @Type(() => Number)
   @IsNumber({ maxDecimalPlaces: 0 })
-  @Min(0)
+  @Min(1000)
   dpAmount?: number;
 
   @IsOptional()
