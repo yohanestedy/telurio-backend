@@ -1,0 +1,23 @@
+services:
+  telurio-api:
+    build: .
+
+    restart: unless-stopped
+
+    env_file:
+      - .env
+
+    expose:
+      - "3000"
+
+    networks:
+      - global-network
+
+    logging:
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+networks:
+  global-network:
+    external: true
