@@ -31,6 +31,7 @@ export interface CalendarMarkerItem {
     productions: number;
     expenses: number;
     generalExpenses: number;
+    coopHealth: number;
     priceUpdates: number;
   };
 }
@@ -74,6 +75,12 @@ export interface CalendarItem {
       categoryName: string | null;
       ownerName: string | null;
     }>;
+    coopHealth: Array<{
+      coopId: string;
+      coopName: string;
+      type: 'VITAMIN' | 'VACCINE' | 'MEDICINE';
+      description: string;
+    }>;
     priceUpdates: Array<{
       pricePerKg: bigint;
     }>;
@@ -115,6 +122,7 @@ export class CalendarService {
           productions: [],
           expenses: [],
           generalExpenses: [],
+          coopHealth: [],
           priceUpdates: [],
         },
       }
@@ -139,6 +147,7 @@ export class CalendarService {
           productions: [],
           expenses: [],
           generalExpenses: [],
+          coopHealth: [],
           priceUpdates: [],
         },
       };
@@ -364,6 +373,35 @@ export class CalendarService {
       }
     }
 
+    const coopHealthRows = await this.prisma.coopHealthRecord.findMany({
+      where: {
+        deletedAt: null,
+        date: { gte: range.startDate, lte: range.endDate },
+        ...(user.role === Role.ADMIN ? {} : { coopId: { in: scopedCoopIds } }),
+      },
+      orderBy: { date: 'asc' },
+      select: {
+        date: true,
+        coopId: true,
+        type: true,
+        description: true,
+      },
+    });
+
+    const coopHealthCoopNames = await this.getCoopNames(
+      coopHealthRows.map((row) => row.coopId),
+    );
+
+    for (const row of coopHealthRows) {
+      const key = dayjs(row.date).format('YYYY-MM-DD');
+      ensureDate(key).events.coopHealth.push({
+        coopId: row.coopId,
+        coopName: coopHealthCoopNames.get(row.coopId) ?? '-',
+        type: row.type,
+        description: row.description,
+      });
+    }
+
     return [...calendarMap.values()].sort((a, b) =>
       a.date.localeCompare(b.date),
     );
@@ -386,6 +424,7 @@ export class CalendarService {
           productions: 0,
           expenses: 0,
           generalExpenses: 0,
+          coopHealth: 0,
           priceUpdates: 0,
         },
       };
@@ -490,6 +529,20 @@ export class CalendarService {
         const key = toDateKey(row.date);
         ensureDate(key).markers.generalExpenses += row._count._all;
       }
+    }
+
+    const coopHealthRows = await this.prisma.coopHealthRecord.groupBy({
+      by: ['date', 'coopId'],
+      where: {
+        deletedAt: null,
+        date: { gte: range.startDate, lte: range.endDate },
+        ...(user.role === Role.ADMIN ? {} : { coopId: { in: scopedCoopIds } }),
+      },
+    });
+
+    for (const row of coopHealthRows) {
+      const key = toDateKey(row.date);
+      ensureDate(key).markers.coopHealth += 1;
     }
 
     return [...markerMap.values()].sort((a, b) => a.date.localeCompare(b.date));

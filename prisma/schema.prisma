@@ -74,6 +74,12 @@ enum CoopPopulationChangeType {
   ADJUSTMENT
 }
 
+enum CoopHealthRecordType {
+  VITAMIN
+  VACCINE
+  MEDICINE
+}
+
 model User {
   id                     String            @id @db.Uuid
   name                   String
@@ -117,6 +123,7 @@ model Coop {
   stockBalance        CoopStockBalance?
   stockMovements      StockMovement[]
   populationHistories CoopPopulationHistory[]
+  healthRecords       CoopHealthRecord[]
 
   @@unique([name])
   @@index([isActive])
@@ -203,6 +210,33 @@ model ProductionRecord {
   @@unique([date, coopId, collectionTime])
   @@index([coopId, date])
   @@index([deletedAt])
+}
+
+model CoopHealthRecord {
+  id              String               @id @db.Uuid
+  date            DateTime             @db.Date
+  coopId          String               @db.Uuid
+  type            CoopHealthRecordType
+  description     String
+  notes           String?
+  reminderDate    DateTime?            @db.Date
+  reminderEnabled Boolean              @default(false)
+  completedAt     DateTime?
+  completedById   String?              @db.Uuid
+  createdById     String               @db.Uuid
+  updatedById     String?              @db.Uuid
+  deletedAt       DateTime?
+  deletedById     String?              @db.Uuid
+  deleteReason    String?
+  createdAt       DateTime             @default(now())
+  updatedAt       DateTime?
+  coop            Coop                 @relation(fields: [coopId], references: [id])
+
+  @@index([coopId, date])
+  @@index([date])
+  @@index([type])
+  @@index([deletedAt])
+  @@index([reminderEnabled, reminderDate])
 }
 
 model EggPrice {
