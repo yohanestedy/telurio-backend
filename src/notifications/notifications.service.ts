@@ -1,10 +1,12 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Cron } from '@nestjs/schedule';
 import { DeliveryStatus, OrderLifecycleStatus } from '@prisma/client';
 import { getTodayDateOnlyUtc, toDateKey } from '../common';
 import { PrismaService } from '../prisma';
 import { FonnteClient } from './fonnte.client';
+import { WHATSAPP_GATEWAY_CLIENT } from './notifications.constants';
+import type { WhatsAppGatewayClient } from './whatsapp-gateway.client';
 
 interface OrderCreatedNotificationPayload {
   id: string;
@@ -34,6 +36,8 @@ export class NotificationsService {
     private readonly configService: ConfigService,
     private readonly prisma: PrismaService,
     private readonly fonnteClient: FonnteClient,
+    @Inject(WHATSAPP_GATEWAY_CLIENT)
+    private readonly waGatewayClient: WhatsAppGatewayClient,
   ) {}
 
   @Cron('0 17,19 * * *', { timeZone: 'Asia/Jakarta' })
@@ -53,11 +57,9 @@ export class NotificationsService {
     }
     this.sentReminderKeys.add(reminderKey);
 
-    const target = this.configService.get<string>('FONNTE_GROUP_FAMILY_ID');
+    const target = this.getWhatsAppTarget();
     if (!target) {
-      this.logger.warn(
-        'FONNTE_GROUP_FAMILY_ID is not configured; order reminder skipped',
-      );
+      this.logger.warn('WA_TARGET is not configured; order reminder skipped');
       return;
     }
 
@@ -70,7 +72,7 @@ export class NotificationsService {
   }
 
   private isWhatsAppEnabled() {
-    return this.configService.get<string>('FONNTE_ENABLED') !== 'false';
+    return this.configService.get<string>('WHATSAPP_ENABLED') !== 'false';
   }
 
   private isOrderReminderSchedulerEnabled() {
@@ -85,10 +87,10 @@ export class NotificationsService {
       return;
     }
 
-    const target = this.configService.get<string>('FONNTE_GROUP_FAMILY_ID');
+    const target = this.getWhatsAppTarget();
     if (!target) {
       this.logger.warn(
-        'FONNTE_GROUP_FAMILY_ID is not configured; order notification skipped',
+        'WA_TARGET is not configured; order notification skipped',
       );
       return;
     }
@@ -248,14 +250,51 @@ export class NotificationsService {
 
   private async sendMessage(target: string, message: string, context: string) {
     try {
-      await this.fonnteClient.sendMessage({ target, message });
+      await this.waGatewayClient.sendMessage({ target, message });
     } catch (error) {
+      if (this.shouldFallbackToFonnte()) {
+        this.logger.warn(
+          `Primary WhatsApp provider failed for ${context}. Retrying with Fonnte: ${
+            error instanceof Error ? error.message : String(error)
+          }`,
+        );
+
+        try {
+          await this.fonnteClient.sendMessage({ target, message });
+          this.logger.log(
+            `Fallback to Fonnte succeeded for ${context} WhatsApp notification`,
+          );
+          return;
+        } catch (fallbackError) {
+          this.logger.warn(
+            `Fallback Fonnte failed to send ${context} WhatsApp notification: ${
+              fallbackError instanceof Error
+                ? fallbackError.message
+                : String(fallbackError)
+            }`,
+          );
+          return;
+        }
+      }
+
       this.logger.warn(
         `Failed to send ${context} WhatsApp notification: ${
           error instanceof Error ? error.message : String(error)
         }`,
       );
     }
+  }
+
+  private shouldFallbackToFonnte() {
+    return (
+      (this.configService.get<string>('WHATSAPP_PROVIDER') ?? 'fonnte')
+        .toLowerCase()
+        .trim() === 'gowa'
+    );
+  }
+
+  private getWhatsAppTarget() {
+    return this.configService.get<string>('WA_TARGET');
   }
 
   private isTodayDeliveryDate(value: Date | string) {

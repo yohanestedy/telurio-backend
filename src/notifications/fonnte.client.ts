@@ -1,10 +1,9 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-
-interface FonnteSendMessagePayload {
-  target: string;
-  message: string;
-}
+import {
+  WhatsAppGatewayClient,
+  WhatsAppSendMessagePayload,
+} from './whatsapp-gateway.client';
 
 interface FonnteSendResponse {
   status?: boolean;
@@ -16,12 +15,12 @@ interface FonnteSendResponse {
 }
 
 @Injectable()
-export class FonnteClient {
+export class FonnteClient implements WhatsAppGatewayClient {
   private readonly logger = new Logger(FonnteClient.name);
 
   constructor(private readonly configService: ConfigService) {}
 
-  async sendMessage(payload: FonnteSendMessagePayload) {
+  async sendMessage(payload: WhatsAppSendMessagePayload) {
     const token = this.configService.get<string>('FONNTE_TOKEN');
     const apiUrl =
       this.configService.get<string>('FONNTE_API_URL') ??
@@ -55,9 +54,9 @@ export class FonnteClient {
       body: form,
     });
 
-    const responseBody = (await response.json().catch(() => null)) as
-      | FonnteSendResponse
-      | null;
+    const responseBody = (await response
+      .json()
+      .catch(() => null)) as FonnteSendResponse | null;
 
     if (!response.ok || responseBody?.status === false) {
       throw new Error(
