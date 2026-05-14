@@ -65,11 +65,18 @@ export class GowaClient implements WhatsAppGatewayClient {
 
   private normalizePhone(value: string) {
     const normalized = value.trim();
-    if (normalized.endsWith('@s.whatsapp.net')) {
+
+    // Sudah format WhatsApp user/group
+    if (
+      normalized.endsWith('@s.whatsapp.net') ||
+      normalized.endsWith('@g.us')
+    ) {
       return normalized;
     }
 
+    // Normalisasi nomor biasa
     const digits = normalized.replace(/\D/g, '');
+
     return `${digits}@s.whatsapp.net`;
   }
 }
