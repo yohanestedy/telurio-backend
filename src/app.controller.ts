@@ -1,4 +1,5 @@
 import { Controller, Get, ServiceUnavailableException } from '@nestjs/common';
+import { hostname } from 'node:os';
 import { AppService } from './app.service';
 import { Public } from './common';
 import { PrismaService } from './prisma';
@@ -34,5 +35,11 @@ export class AppController {
         message: 'Database is not ready',
       });
     }
+  }
+
+  @Public()
+  @Get('server')
+  getServerHostname() {
+    return { hostname: hostname() };
   }
 }
