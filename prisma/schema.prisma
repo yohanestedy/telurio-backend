@@ -209,6 +209,7 @@ model ProductionRecord {
 
   @@unique([date, coopId, collectionTime])
   @@index([coopId, date])
+  @@index([coopId, deletedAt, date])
   @@index([deletedAt])
 }
 
@@ -296,6 +297,7 @@ model Order {
 
   @@unique([createdById, idempotencyKey])
   @@index([deliveryDate, lifecycleStatus, deliveryStatus])
+  @@index([lifecycleStatus, deliveryStatus, deliveryDate])
   @@index([paymentStatus])
   @@index([customerId])
 }
@@ -405,6 +407,7 @@ model Expense {
 
   @@unique([createdById, idempotencyKey])
   @@index([coopId, date])
+  @@index([coopId, deletedAt, date])
   @@index([expenseCategoryId])
   @@index([deletedAt])
 }
@@ -468,6 +471,7 @@ model GeneralExpense {
 
   @@unique([createdById, idempotencyKey])
   @@index([ownerId, date])
+  @@index([ownerId, deletedAt, date])
   @@index([categoryId])
   @@index([deletedAt])
 }
