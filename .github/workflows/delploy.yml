@@ -41,15 +41,24 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      - name: Deploy to VPS
+      - name: Deploy to VPS ORACLE
         uses: appleboy/ssh-action@v1.0.3
         with:
-          host: ${{ secrets.VPS_HOST }}
-          username: ${{ secrets.VPS_USER }}
-          key: ${{ secrets.VPS_SSH_KEY }}
-          port: ${{ secrets.VPS_PORT }}
-
+          host: ${{ secrets.VPS1_HOST }}
+          username: ${{ secrets.VPS1_USER }}
+          key: ${{ secrets.VPS1_SSH_KEY }}
+          port: ${{ secrets.VPS1_PORT }}
           script: |
             cd ~/apps/telurio-api
-            chmod +x deploy-telurio.sh
+            ./deploy-telurio.sh
+
+      - name: Deploy to VPS AZURE
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VPS2_HOST }}
+          username: ${{ secrets.VPS2_USER }}
+          key: ${{ secrets.VPS2_SSH_KEY }}
+          port: ${{ secrets.VPS2_PORT }}
+          script: |
+            cd ~/apps/telurio-api
             ./deploy-telurio.sh
