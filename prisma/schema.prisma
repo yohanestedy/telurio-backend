@@ -96,9 +96,29 @@ model User {
   updatedAt              DateTime?
   coopAccesses           UserCoopAccess[]
   ownedExpenseCategories ExpenseCategory[]
+  sessions               UserSession[]
 
   @@index([role, isActive])
   @@index([deletedAt])
+}
+
+model UserSession {
+  id               String    @id @db.Uuid
+  userId           String    @db.Uuid
+  sessionId        String    @unique
+  refreshTokenHash String
+  deviceLabel      String?
+  ipAddress        String?
+  userAgent        String?
+  expiresAt        DateTime
+  revokedAt        DateTime?
+  lastUsedAt       DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime?
+  user             User      @relation(fields: [userId], references: [id])
+
+  @@index([userId, revokedAt])
+  @@index([expiresAt])
 }
 
 model Coop {

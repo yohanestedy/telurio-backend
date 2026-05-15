@@ -9,12 +9,18 @@ export interface JwtPayload {
   role: string;
 }
 
+export interface AuthenticatedUser {
+  id: string;
+  username: string;
+  role: string;
+}
+
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {
   constructor(configService: ConfigService) {
-    const secret = configService.get<string>('JWT_SECRET');
+    const secret = configService.get<string>('JWT_ACCESS_SECRET');
     if (!secret) {
-      throw new Error('JWT_SECRET environment variable is not set');
+      throw new Error('JWT_ACCESS_SECRET environment variable is not set');
     }
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
@@ -23,7 +29,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     });
   }
 
-  validate(payload: JwtPayload) {
+  validate(payload: JwtPayload): AuthenticatedUser {
     return { id: payload.sub, username: payload.username, role: payload.role };
   }
 }
