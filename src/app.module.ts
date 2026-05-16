@@ -23,6 +23,7 @@ import { StocksModule } from './stocks';
 import { GeneralExpensesModule } from './general-expenses';
 import { GeneralExpenseCategoriesModule } from './general-expense-categories';
 import { CoopHealthModule } from './coop-health';
+import { SchedulerModule } from './scheduler';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { AllExceptionsFilter } from './common/filters';
@@ -56,6 +57,7 @@ import {
     GeneralExpensesModule,
     GeneralExpenseCategoriesModule,
     CoopHealthModule,
+    SchedulerModule,
   ],
   controllers: [AppController],
   providers: [

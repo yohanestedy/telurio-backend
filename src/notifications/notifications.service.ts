@@ -1,6 +1,5 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { Cron } from '@nestjs/schedule';
 import { DeliveryStatus, OrderLifecycleStatus } from '@prisma/client';
 import { getTodayDateOnlyUtc, toDateKey } from '../common';
 import { PrismaService } from '../prisma';
@@ -40,7 +39,6 @@ export class NotificationsService {
     private readonly waGatewayClient: WhatsAppGatewayClient,
   ) {}
 
-  @Cron('0 17,19 * * *', { timeZone: 'Asia/Jakarta' })
   async runScheduledOrderReminder() {
     if (!this.isOrderReminderSchedulerEnabled()) {
       return;
