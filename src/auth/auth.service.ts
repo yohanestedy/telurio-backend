@@ -279,6 +279,7 @@ export class AuthService {
       'AUTH_COOKIE_SAME_SITE',
       'lax',
     ) as 'lax' | 'strict' | 'none';
+    const domain = this.configService.get<string>('AUTH_COOKIE_DOMAIN');
     return {
       httpOnly: true,
       secure:
@@ -286,6 +287,7 @@ export class AuthService {
         'true',
       sameSite,
       path: '/',
+      ...(domain ? { domain } : {}),
       maxAge: this.parseMs(this.refreshExpiresIn),
     };
   }
