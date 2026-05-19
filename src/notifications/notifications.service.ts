@@ -69,6 +69,40 @@ export class NotificationsService {
     await this.sendMessage(target, message, 'today-delivery-reminder');
   }
 
+  async runMorningOrdersSummary() {
+    if (!this.isMorningOrdersSummaryEnabled()) {
+      return;
+    }
+
+    if (!this.isWhatsAppEnabled()) {
+      return;
+    }
+
+    const target = this.getWhatsAppTarget();
+    if (!target) {
+      this.logger.warn('WA_TARGET is not configured; morning orders summary skipped');
+      return;
+    }
+
+    const message = await this.buildTodayOrdersMessage({
+      showPrice: false,
+      showInvoice: false,
+      showPaymentStatus: false,
+      showDeliveryStatus: false,
+    });
+    if (!message) {
+      return;
+    }
+
+    await this.sendMessage(target, message, 'morning-orders-summary');
+  }
+
+  private isMorningOrdersSummaryEnabled() {
+    return (
+      this.configService.get<string>('MORNING_ORDERS_SUMMARY_SCHEDULER_ENABLED') === 'true'
+    );
+  }
+
   private isWhatsAppEnabled() {
     return this.configService.get<string>('WHATSAPP_ENABLED') !== 'false';
   }
@@ -102,11 +136,13 @@ export class NotificationsService {
     if (this.isTodayDeliveryDate(order.deliveryDate)) {
       await this.wait(2000);
       const todayOrdersMessage = await this.buildTodayOrdersMessage();
-      await this.sendMessage(
-        target,
-        todayOrdersMessage,
-        'today-orders-summary',
-      );
+      if (todayOrdersMessage) {
+        await this.sendMessage(
+          target,
+          todayOrdersMessage,
+          'today-orders-summary',
+        );
+      }
     }
   }
 
@@ -147,7 +183,19 @@ export class NotificationsService {
     ].join('\n');
   }
 
-  private async buildTodayOrdersMessage() {
+  private async buildTodayOrdersMessage(options?: {
+    showPrice?: boolean;
+    showInvoice?: boolean;
+    showPaymentStatus?: boolean;
+    showDeliveryStatus?: boolean;
+  }) {
+    const {
+      showPrice = true,
+      showInvoice = true,
+      showPaymentStatus = true,
+      showDeliveryStatus = true,
+    } = options ?? {};
+
     const today = getTodayDateOnlyUtc();
     const orders = await this.prisma.order.findMany({
       where: {
@@ -160,16 +208,34 @@ export class NotificationsService {
       orderBy: [{ createdAt: 'asc' }],
     });
 
-    const lines = orders.map((order, index) =>
-      [
+    const lines = orders.map((order, index) => {
+      const parts = [
         `${index + 1}. ${order.customer.name}`,
-        `*${this.formatKg(order.quantityKg.toString())}* kg @${order.pricePerKg ? this.formatNumber(order.pricePerKg) : 'Belum dikunci'}`,
-        order.totalInvoice
-          ? this.formatNumber(order.totalInvoice)
-          : 'Belum dihitung',
-        this.paymentStatusLabel(order.paymentStatus),
-        this.deliveryStatusLabel(order.deliveryStatus),
-      ].join(' / '),
+        showPrice
+          ? `*${this.formatKg(order.quantityKg.toString())}* kg @${order.pricePerKg ? this.formatNumber(order.pricePerKg) : 'Belum dikunci'}`
+          : `*${this.formatKg(order.quantityKg.toString())}* kg`,
+      ];
+
+      if (showInvoice) {
+        parts.push(order.totalInvoice ? this.formatNumber(order.totalInvoice) : 'Belum dihitung');
+      }
+      if (showPaymentStatus) {
+        parts.push(this.paymentStatusLabel(order.paymentStatus));
+      }
+      if (showDeliveryStatus) {
+        parts.push(this.deliveryStatusLabel(order.deliveryStatus));
+      }
+
+      return parts.join(' / ');
+    });
+
+    if (!orders.length) {
+      return null;
+    }
+
+    const totalKg = orders.reduce(
+      (sum, order) => sum + Number(order.quantityKg),
+      0,
     );
 
     return [
@@ -177,6 +243,8 @@ export class NotificationsService {
       this.formatLongDateId(today),
       '',
       ...(lines.length ? lines : ['Belum ada pesanan untuk hari ini.']),
+      '',
+      `Total Pesanan: *${this.formatKg(totalKg.toString())}* kg`,
     ].join('\n');
   }
 

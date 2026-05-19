@@ -17,6 +17,11 @@ export class SchedulerService {
     await this.userSessionCleanupService.cleanupOldSessions();
   }
 
+  @Cron('0 6 * * *', { timeZone: JAKARTA_TIME_ZONE })
+  async runMorningOrdersSummary() {
+    await this.notificationsService.runMorningOrdersSummary();
+  }
+
   @Cron('0 17,19 * * *', { timeZone: JAKARTA_TIME_ZONE })
   async runScheduledOrderReminder() {
     await this.notificationsService.runScheduledOrderReminder();
