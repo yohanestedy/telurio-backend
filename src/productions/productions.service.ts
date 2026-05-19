@@ -438,6 +438,7 @@ export class ProductionsService {
         date: true,
         coopId: true,
         goodCount: true,
+        goodKg: true,
         populationSnapshot: true,
       },
       orderBy: {
@@ -455,6 +456,7 @@ export class ProductionsService {
       string,
       {
         goodCount: number;
+        goodKg: number;
         populationByCoop: Map<string, number>;
       }
     >();
@@ -463,10 +465,12 @@ export class ProductionsService {
       const key = toDateKey(row.date);
       const bucket = rowMap.get(key) ?? {
         goodCount: 0,
+        goodKg: 0,
         populationByCoop: new Map<string, number>(),
       };
 
       bucket.goodCount += row.goodCount;
+      bucket.goodKg += Number(row.goodKg);
       if (row.populationSnapshot !== null) {
         bucket.populationByCoop.set(row.coopId, row.populationSnapshot);
       }
@@ -480,6 +484,7 @@ export class ProductionsService {
       const row = rowMap.get(dateKey);
       const hasProduction = Boolean(row);
       const goodCount = row?.goodCount ?? 0;
+      const goodKg = row?.goodKg ?? 0;
       const population = row?.populationByCoop.size
         ? [...row.populationByCoop.values()].reduce(
             (sum, item) => sum + item,
@@ -495,6 +500,7 @@ export class ProductionsService {
         date: dateKey,
         hasProduction,
         goodCount,
+        goodKg,
         averagePopulation: population ? Math.round(population) : null,
         performancePercent,
       };
