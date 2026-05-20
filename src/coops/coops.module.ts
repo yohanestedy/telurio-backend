@@ -5,5 +5,6 @@ import { CoopsService } from './coops.service';
 @Module({
   controllers: [CoopsController],
   providers: [CoopsService],
+  exports: [CoopsService],
 })
 export class CoopsModule {}

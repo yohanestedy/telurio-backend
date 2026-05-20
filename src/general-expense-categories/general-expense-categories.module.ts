@@ -5,5 +5,6 @@ import { GeneralExpenseCategoriesService } from './general-expense-categories.se
 @Module({
   controllers: [GeneralExpenseCategoriesController],
   providers: [GeneralExpenseCategoriesService],
+  exports: [GeneralExpenseCategoriesService],
 })
 export class GeneralExpenseCategoriesModule {}
