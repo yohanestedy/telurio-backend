@@ -36,6 +36,6 @@ import { UserSessionCleanupService } from './user-session-cleanup.service';
     RolesGuard,
     UserSessionCleanupService,
   ],
-  exports: [JwtAuthGuard, RolesGuard, UserSessionCleanupService],
+  exports: [AuthService, JwtAuthGuard, RolesGuard, UserSessionCleanupService],
 })
 export class AuthModule {}

@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { Role } from '@prisma/client';
+import { AuthService } from '../auth/auth.service';
 import { OrdersService } from '../orders/orders.service';
 import { CustomersService } from '../customers/customers.service';
 import { CoopsService } from '../coops/coops.service';
@@ -72,6 +73,7 @@ export class AiToolsRegistry {
   private readonly tools: AiTool[];
 
   constructor(
+    private readonly auth: AuthService,
     private readonly orders: OrdersService,
     private readonly customers: CustomersService,
     private readonly coops: CoopsService,
@@ -136,6 +138,14 @@ export class AiToolsRegistry {
 
   private build(): AiTool[] {
     return [
+      {
+        name: 'get_my_profile',
+        description:
+          'Ambil profil user yang sedang chat (nama, username, role, akses kandang). Wajib dipanggil ketika user bertanya soal data dirinya sendiri seperti "siapa saya", "nama saya", atau "akses saya apa".',
+        permission: 'profile.view',
+        parameters: { type: 'object', properties: {} },
+        execute: async (_args, user) => this.auth.getMe(user.id),
+      },
       {
         name: 'get_today_orders',
         description:

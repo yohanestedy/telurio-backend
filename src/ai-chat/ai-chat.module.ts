@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { AuthModule } from '../auth';
 import { OrdersModule } from '../orders';
 import { CustomersModule } from '../customers';
 import { CoopsModule } from '../coops';
@@ -22,6 +23,7 @@ import { AiToolsRegistry } from './ai-tools.registry';
 
 @Module({
   imports: [
+    AuthModule,
     OrdersModule,
     CustomersModule,
     CoopsModule,
