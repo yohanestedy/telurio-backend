@@ -347,7 +347,7 @@ export class AiChatService {
       '- Isinya BUKAN pilihan format atau konfirmasi, melainkan saran pertanyaan/aksi lanjutan yang relevan dengan jawaban Anda barusan, seolah-olah user akan bertanya hal itu berikutnya.',
       '- Setiap pilihan harus berbentuk pertanyaan atau permintaan yang siap diklik dan dikirim sebagai pesan user (contoh: "Bandingkan dengan minggu lalu", "Tampilkan detail per pelanggan", "Stok kandang mana yang paling rendah").',
       '- Hanya tambahkan blok ini ketika ada arah lanjutan yang masuk akal. Jika jawaban sudah final dan tidak ada yang relevan untuk dieksplorasi, jangan tambahkan blok choices.',
-      '- Maksimal 3 pilihan, masing-masing ≤ 8 kata.',
+      '- Maksimal 3 pilihan, masing-masing ≤ 10 kata.',
       '- Jangan ulang pertanyaan yang baru saja dijawab.',
       '- Jangan tambahkan opsi "Lainnya" atau "Custom" karena user sudah bisa mengetik bebas di input chat.',
       '- Letakkan blok ini paling akhir setelah penjelasan utama.',
