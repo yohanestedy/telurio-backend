@@ -10,6 +10,7 @@ import { PrismaService } from '../prisma';
 import {
   BusinessRuleException,
   getTodayDateOnlyUtc,
+  parseDateOnlyUtc,
   toDateKey,
 } from '../common';
 import { QueryCalendarDto } from './dto';
@@ -109,8 +110,8 @@ export class CalendarService {
       );
     }
 
-    const startDate = target.startOf('day').toDate();
-    const endDate = target.endOf('day').toDate();
+    const startDate = parseDateOnlyUtc(date);
+    const endDate = new Date(startDate.getTime() + 24 * 60 * 60 * 1000 - 1);
 
     const rows = await this.fetchCalendarData(user, { startDate, endDate });
 

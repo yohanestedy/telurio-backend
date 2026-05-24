@@ -50,3 +50,26 @@ export function getTodayDateKey(): string {
 export function getTodayDateOnlyUtc(): Date {
   return parseDateOnlyUtc(getTodayDateKey(), 'today');
 }
+
+export function startOfWeekMondayUtc(dateKey: string): Date {
+  const date = parseDateOnlyUtc(dateKey);
+  const dayIndex = date.getUTCDay(); // 0=Sun, 1=Mon, ..., 6=Sat
+  const offset = dayIndex === 0 ? 6 : dayIndex - 1;
+  return new Date(date.getTime() - offset * 24 * 60 * 60 * 1000);
+}
+
+export function endOfWeekMondayUtc(dateKey: string): Date {
+  const start = startOfWeekMondayUtc(dateKey);
+  return new Date(start.getTime() + 7 * 24 * 60 * 60 * 1000 - 1);
+}
+
+export function startOfMonthUtc(dateKey: string): Date {
+  const [year, month] = dateKey.slice(0, 10).split('-').map(Number);
+  return new Date(`${year}-${String(month).padStart(2, '0')}-01T00:00:00.000Z`);
+}
+
+export function endOfMonthUtc(dateKey: string): Date {
+  const [year, month] = dateKey.slice(0, 10).split('-').map(Number);
+  const nextMonth = new Date(Date.UTC(year!, month!, 1));
+  return new Date(nextMonth.getTime() - 1);
+}
