@@ -12,6 +12,8 @@ import {
   ForbiddenException,
   getTodayDateOnlyUtc,
   NotFoundException,
+  startOfMonthUtc,
+  endOfMonthUtc,
 } from '../common';
 
 interface AuthUser {
@@ -256,16 +258,13 @@ export class ReportsService {
   }
 
   private getPeriod(month?: number, year?: number): ReportPeriod {
-    const now = dayjs(getTodayDateOnlyUtc());
-    const resolvedMonth = month ?? now.month() + 1;
-    const resolvedYear = year ?? now.year();
+    const today = getTodayDateOnlyUtc();
+    const resolvedYear = year ?? today.getUTCFullYear();
+    const resolvedMonth = month ?? today.getUTCMonth() + 1;
 
-    const start = dayjs(
-      `${resolvedYear}-${String(resolvedMonth).padStart(2, '0')}-01`,
-    )
-      .startOf('day')
-      .toDate();
-    const end = dayjs(start).endOf('month').toDate();
+    const dateKey = `${resolvedYear}-${String(resolvedMonth).padStart(2, '0')}-01`;
+    const start = startOfMonthUtc(dateKey);
+    const end = endOfMonthUtc(dateKey);
 
     return {
       month: resolvedMonth,
