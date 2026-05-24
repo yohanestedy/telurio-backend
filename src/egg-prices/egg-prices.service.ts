@@ -8,6 +8,7 @@ import {
   NotFoundException,
   generateUuidV7,
   parseDateOnlyUtc,
+  toDateKey,
 } from '../common';
 import {
   CreateEggPriceDto,
@@ -171,7 +172,7 @@ export class EggPricesService {
 
     return {
       id: row.id,
-      effectiveDate: row.effectiveDate,
+      effectiveDate: toDateKey(row.effectiveDate),
       pricePerKg: row.pricePerKg,
       notes: row.notes,
       updatedByName,
