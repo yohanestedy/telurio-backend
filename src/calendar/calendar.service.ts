@@ -9,9 +9,14 @@ import dayjs from 'dayjs';
 import { PrismaService } from '../prisma';
 import {
   BusinessRuleException,
+  getTodayDateKey,
   getTodayDateOnlyUtc,
   parseDateOnlyUtc,
   toDateKey,
+  startOfWeekMondayUtc,
+  endOfWeekMondayUtc,
+  startOfMonthUtc,
+  endOfMonthUtc,
 } from '../common';
 import { QueryCalendarDto } from './dto';
 
@@ -550,7 +555,8 @@ export class CalendarService {
   }
 
   private resolveRange(query: QueryCalendarDto): CalendarRange {
-    const today = dayjs(getTodayDateOnlyUtc());
+    const todayKey = getTodayDateKey();
+    const todayStart = parseDateOnlyUtc(todayKey);
 
     if (query.startDate || query.endDate) {
       if (!query.startDate || !query.endDate) {
@@ -559,40 +565,30 @@ export class CalendarService {
         );
       }
 
-      const startDate = dayjs(query.startDate);
-      const endDate = dayjs(query.endDate);
+      const startDate = parseDateOnlyUtc(query.startDate, 'startDate');
+      const endDate = new Date(parseDateOnlyUtc(query.endDate, 'endDate').getTime() + 24 * 60 * 60 * 1000 - 1);
 
-      if (!startDate.isValid() || !endDate.isValid()) {
-        throw new BusinessRuleException(
-          'Invalid date format, expected YYYY-MM-DD',
-        );
-      }
-
-      return {
-        startDate: startDate.startOf('day').toDate(),
-        endDate: endDate.endOf('day').toDate(),
-      };
+      return { startDate, endDate };
     }
 
     const view = query.view ?? 'month';
 
     if (view === 'day') {
       return {
-        startDate: today.startOf('day').toDate(),
-        endDate: today.endOf('day').toDate(),
+        startDate: todayStart,
+        endDate: new Date(todayStart.getTime() + 24 * 60 * 60 * 1000 - 1),
       };
     }
 
     if (view === 'week') {
-      return {
-        startDate: today.startOf('week').toDate(),
-        endDate: today.endOf('week').toDate(),
-      };
+      const startDate = startOfWeekMondayUtc(todayKey);
+      const endDate = endOfWeekMondayUtc(todayKey);
+      return { startDate, endDate };
     }
 
     return {
-      startDate: today.startOf('month').toDate(),
-      endDate: today.endOf('month').toDate(),
+      startDate: startOfMonthUtc(todayKey),
+      endDate: endOfMonthUtc(todayKey),
     };
   }
 
