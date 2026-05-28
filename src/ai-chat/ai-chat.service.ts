@@ -9,6 +9,7 @@ import type {
   ModelOption,
   ToolDescriptor,
 } from './dto/chat.dto';
+import { SCHEMA_CONTEXT } from './schema-context';
 import dayjs from 'dayjs';
 
 interface RawModelEntry {
@@ -336,6 +337,9 @@ export class AiChatService {
       `Tanggal hari ini (zona waktu Asia/Jakarta): ${today}.`,
       `User saat ini: role ${user.role} (${roleLabel[user.role] ?? user.role}).`,
       'Gunakan tools yang tersedia untuk mengambil data nyata dari database. Jangan menebak angka atau membuat data palsu.',
+      '',
+      SCHEMA_CONTEXT,
+      '',
       'Format jawaban dengan Markdown (GFM). Gunakan **bold** untuk istilah penting, list `- item` untuk enumerasi, dan tabel pipe `| Kolom | Kolom |` ketika menampilkan data tabular seperti daftar pesanan, ringkasan per kandang, atau perbandingan angka. Pastikan tabel selalu memakai header row dan separator `|---|---|`.',
       'Saat menjawab, format angka dengan pemisah ribuan titik (contoh 1.250 kg, Rp 12.500.000).',
       'Setelah menjawab, Anda BOLEH menambahkan blok rekomendasi pertanyaan lanjutan dengan format:',
