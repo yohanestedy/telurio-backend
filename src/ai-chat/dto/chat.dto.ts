@@ -38,6 +38,10 @@ export class ChatCompletionsDto {
   @ValidateNested({ each: true })
   @Type(() => ChatMessageDto)
   messages!: ChatMessageDto[];
+
+  @IsOptional()
+  @IsString()
+  clientTimezone?: string;
 }
 
 export interface ModelOption {

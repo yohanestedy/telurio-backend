@@ -11,6 +11,14 @@ import type {
 } from './dto/chat.dto';
 import { SCHEMA_CONTEXT } from './schema-context';
 import dayjs from 'dayjs';
+import utc from 'dayjs/plugin/utc';
+import timezone from 'dayjs/plugin/timezone';
+import 'dayjs/locale/id';
+
+dayjs.extend(utc);
+dayjs.extend(timezone);
+
+const JAKARTA_TZ = 'Asia/Jakarta';
 
 interface RawModelEntry {
   id: string;
@@ -112,7 +120,7 @@ export class AiChatService {
     const model = body.model || this.defaultModel;
 
     const messages: Array<Record<string, unknown>> = [
-      { role: 'system', content: this.buildSystemPrompt(user) },
+      { role: 'system', content: this.buildSystemPrompt(user, body.clientTimezone) },
       ...body.messages.map((msg) => this.normalizeMessage(msg)),
     ];
 
@@ -323,18 +331,57 @@ export class AiChatService {
     return base;
   }
 
-  private buildSystemPrompt(user: AiAuthUser): string {
-    const today = dayjs().format('dddd, DD MMMM YYYY');
+  private isValidTimezone(tz: string | undefined): tz is string {
+    if (!tz) return false;
+    try {
+      new Intl.DateTimeFormat('en-US', { timeZone: tz });
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  private buildSystemPrompt(user: AiAuthUser, clientTimezone?: string): string {
+    const nowJakarta = dayjs().tz(JAKARTA_TZ).locale('id');
+    const jakartaToday = nowJakarta.format('dddd, DD MMMM YYYY');
+    const jakartaTime = nowJakarta.format('HH:mm');
+
+    const userTz = this.isValidTimezone(clientTimezone)
+      ? clientTimezone
+      : JAKARTA_TZ;
+    const sameAsJakarta = userTz === JAKARTA_TZ;
+    const nowUser = dayjs().tz(userTz).locale('id');
+    const userToday = nowUser.format('dddd, DD MMMM YYYY');
+    const userTime = nowUser.format('HH:mm');
+
     const roleLabel: Record<Role, string> = {
       ADMIN: 'Admin (akses penuh)',
       OWNER: 'Owner (pemilik kandang, akses laporan finansial)',
       OPERATOR: 'Operator (akses operasional kandang)',
     };
 
+    const timeLines: string[] = [];
+    timeLines.push(
+      `Waktu operasional bisnis (Asia/Jakarta / WIB): ${jakartaToday}, jam ${jakartaTime}.`,
+    );
+    if (sameAsJakarta) {
+      timeLines.push('User berada di zona waktu yang sama (Asia/Jakarta).');
+    } else {
+      timeLines.push(
+        `Waktu lokal user (${userTz}): ${userToday}, jam ${userTime}.`,
+      );
+      timeLines.push(
+        'Aturan zona waktu:',
+        '- Untuk pertanyaan jam atau tanggal pribadi user (contoh: "sekarang jam berapa", "hari ini tanggal berapa"), pakai waktu lokal user.',
+        '- Untuk filter data bisnis (contoh: "pesanan kemarin", "produksi minggu ini", "expense bulan ini"), SELALU pakai Asia/Jakarta karena semua data operasional (deliveryDate, production date, dst) tersimpan dalam tanggal Asia/Jakarta.',
+        '- Jika tanggal user dan tanggal Jakarta berbeda, sebutkan secara eksplisit di jawaban (contoh: "Pesanan kemarin (28 Mei 2026 Asia/Jakarta, di lokasi Anda masih 27 Mei)").',
+      );
+    }
+
     return [
       'Anda adalah asisten AI untuk Telurio, sistem manajemen peternakan telur keluarga Pak Heri.',
       'Tugas Anda hanya membaca data dan memberikan jawaban yang ringkas, akurat, dalam Bahasa Indonesia.',
-      `Tanggal hari ini (zona waktu Asia/Jakarta): ${today}.`,
+      ...timeLines,
       `User saat ini: role ${user.role} (${roleLabel[user.role] ?? user.role}).`,
       'Gunakan tools yang tersedia untuk mengambil data nyata dari database. Jangan menebak angka atau membuat data palsu.',
       '',
