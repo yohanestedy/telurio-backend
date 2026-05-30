@@ -22,6 +22,7 @@ import {
 import {
   CancelOrderDto,
   CreateOrderDto,
+  LockOrderPriceDto,
   QueryOrdersDto,
   UpdateOrderDto,
 } from './dto';
@@ -426,6 +427,79 @@ export class OrdersService {
         pricePerKg: nextPricePerKg,
         priceSource: nextPriceSource,
         totalInvoice: nextTotalInvoice,
+        updatedById: user.id,
+        updatedAt: new Date(),
+      },
+    });
+
+    if (updateResult.count !== 1) {
+      throw new BusinessRuleException(
+        'Order has changed, please reload and retry',
+      );
+    }
+
+    return this.getOrderById(id);
+  }
+
+  async lockOrderPrice(id: string, user: AuthUser, dto: LockOrderPriceDto) {
+    const existing = await this.prisma.order.findUnique({ where: { id } });
+
+    if (!existing) {
+      throw new NotFoundException('Order not found');
+    }
+
+    if (
+      existing.lifecycleStatus !== OrderLifecycleStatus.ACTIVE ||
+      existing.deliveryStatus !== DeliveryStatus.BELUM_DIHANTAR
+    ) {
+      throw new BusinessRuleException('Order is not editable');
+    }
+
+    if (existing.pricePerKg !== null) {
+      throw new BusinessRuleException('Order price is already locked');
+    }
+
+    const eggPrice = await this.prisma.eggPrice.findFirst({
+      where: {
+        effectiveDate: existing.deliveryDate,
+        deletedAt: null,
+      },
+      select: { pricePerKg: true },
+    });
+
+    if (!eggPrice) {
+      throw new BusinessRuleException(
+        'Daily egg price for delivery date is not available',
+      );
+    }
+
+    const customPricePerKg =
+      dto.customPricePerKg !== undefined
+        ? BigInt(String(dto.customPricePerKg))
+        : null;
+
+    const lockedPrice = customPricePerKg ?? eggPrice.pricePerKg;
+    const lockedPriceSource =
+      customPricePerKg !== null
+        ? ORDER_PRICE_SOURCE.CUSTOM
+        : ORDER_PRICE_SOURCE.STANDARD;
+    const totalInvoice = this.computeInvoice(
+      Number(existing.quantityKg),
+      lockedPrice,
+    );
+
+    const updateResult = await this.prisma.order.updateMany({
+      where: {
+        id,
+        lifecycleStatus: OrderLifecycleStatus.ACTIVE,
+        deliveryStatus: DeliveryStatus.BELUM_DIHANTAR,
+        pricePerKg: null,
+        updatedAt: existing.updatedAt,
+      },
+      data: {
+        pricePerKg: lockedPrice,
+        priceSource: lockedPriceSource,
+        totalInvoice,
         updatedById: user.id,
         updatedAt: new Date(),
       },

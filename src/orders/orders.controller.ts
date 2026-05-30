@@ -14,6 +14,7 @@ import { OrdersService } from './orders.service';
 import {
   CancelOrderDto,
   CreateOrderDto,
+  LockOrderPriceDto,
   QueryOrdersDto,
   UpdateOrderDto,
 } from './dto';
@@ -55,6 +56,16 @@ export class OrdersController {
     @Body() dto: UpdateOrderDto,
   ) {
     return await this.ordersService.updateOrder(id, user, dto);
+  }
+
+  @Post(':id/lock-price')
+  @Roles(Role.ADMIN)
+  async lockPrice(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() user: { id: string; role: Role },
+    @Body() dto: LockOrderPriceDto,
+  ) {
+    return await this.ordersService.lockOrderPrice(id, user, dto);
   }
 
   @Post(':id/cancel')
