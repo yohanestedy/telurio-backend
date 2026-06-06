@@ -10,7 +10,12 @@ import {
 } from '@nestjs/common';
 import { Role } from '@prisma/client';
 import { CurrentUser, Roles } from '../common';
-import { CreateCoopDto, QueryCoopsDto, UpdateCoopDto } from './dto';
+import {
+  CreateCoopDto,
+  QueryCoopPopulationHistoryDto,
+  QueryCoopsDto,
+  UpdateCoopDto,
+} from './dto';
 import { CoopsService } from './coops.service';
 
 @Controller('coops')
@@ -23,6 +28,15 @@ export class CoopsController {
     @Query() query: QueryCoopsDto,
   ) {
     return this.coopsService.listCoops(user, query);
+  }
+
+  @Get(':id/population-histories')
+  async getPopulationHistories(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() user: { id: string; role: Role },
+    @Query() query: QueryCoopPopulationHistoryDto,
+  ) {
+    return await this.coopsService.getPopulationHistories(id, user, query);
   }
 
   @Post()

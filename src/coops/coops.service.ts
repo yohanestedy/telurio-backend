@@ -9,7 +9,12 @@ import {
   NotFoundException,
   parseDateOnlyUtc,
 } from '../common';
-import { CreateCoopDto, QueryCoopsDto, UpdateCoopDto } from './dto';
+import {
+  CreateCoopDto,
+  QueryCoopPopulationHistoryDto,
+  QueryCoopsDto,
+  UpdateCoopDto,
+} from './dto';
 
 interface AuthUserContext {
   id: string;
@@ -275,6 +280,74 @@ export class CoopsService {
     return {
       ...updated,
       depreciationPercent: updated.depreciationPercent.toString(),
+    };
+  }
+
+  async getPopulationHistories(
+    coopId: string,
+    user: AuthUserContext,
+    query: QueryCoopPopulationHistoryDto,
+  ) {
+    const coop = await this.prisma.coop.findFirst({
+      where: {
+        id: coopId,
+        deletedAt: null,
+        ...(user.role === Role.ADMIN
+          ? {}
+          : {
+              userAccesses: {
+                some: {
+                  userId: user.id,
+                  deletedAt: null,
+                },
+              },
+            }),
+      },
+      select: {
+        id: true,
+        name: true,
+        population: true,
+      },
+    });
+
+    if (!coop) {
+      throw new NotFoundException('Coop not found');
+    }
+
+    const histories = await this.prisma.coopPopulationHistory.findMany({
+      where: { coopId },
+      orderBy: [
+        { effectiveDate: 'desc' },
+        { createdAt: 'desc' },
+      ],
+      take: query.limit,
+      select: {
+        id: true,
+        effectiveDate: true,
+        previousPopulation: true,
+        newPopulation: true,
+        deltaPopulation: true,
+        changeType: true,
+        reason: true,
+        createdAt: true,
+      },
+    });
+
+    const initialPopulation =
+      histories.length > 0
+        ? histories[histories.length - 1]!.newPopulation
+        : coop.population;
+    const totalDelta = coop.population - initialPopulation;
+    const latestChange = histories[0]?.deltaPopulation ?? 0;
+
+    return {
+      coopId: coop.id,
+      coopName: coop.name,
+      currentPopulation: coop.population,
+      initialPopulation,
+      totalDelta,
+      latestChange,
+      items: histories,
     };
   }
 
